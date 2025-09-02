@@ -1,0 +1,8 @@
+
+@reference "tailwindcss";
+
+:host {
+
+	@apply rounded-md flex justify-center items-center border border-solid w-8 h-10 bg-white select-none
+
+}

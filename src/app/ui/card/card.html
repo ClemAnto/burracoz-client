@@ -1,0 +1,6 @@
+@if (value() == "*") {
+	<span>👑</span>
+} @else {
+	<span>{{value()}}</span>
+	<ui-suit-icon [suit]="suit()" />
+}

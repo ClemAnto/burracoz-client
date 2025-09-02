@@ -1,0 +1,16 @@
+BOARD
+
+<header class="p-2">
+
+	<button nz-button (click)="shuffle()">SHUFFLE</button>
+	<button nz-button (click)="move()">MOVE</button>
+</header>
+
+<div class="flex gap-2 p-2">
+	<ui-tweener>
+		<ui-deck #tableDeck [cards]="tableCards()"
+			class="outline outline-amber-500 min-w-[200px]"/>
+		<ui-deck #myDeck [cards]="myCards()"
+			class="outline outline-amber-500 min-w-[200px]"/>
+	</ui-tweener>
+</div>
