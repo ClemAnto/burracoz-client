@@ -1,0 +1,11 @@
+@if (cards()) {
+<div class="flex gap-2 flex-wrap">
+	@for (item of list(); track item.uid) {
+		<ui-card
+			(click)="toggleItem(item.uid)" 
+			[ngClass]="{'outline':selectedSet().has(item.uid)}"
+			[attr.tween-id]="item.uid" 
+			[card]="item.tag" />
+	}
+</div>
+}

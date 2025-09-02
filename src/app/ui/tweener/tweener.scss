@@ -1,0 +1,9 @@
+:host {
+	display: contents;
+
+	::ng-deep {
+		.tweening {
+			//outline: 1px solid red;
+		}
+	}
+}
