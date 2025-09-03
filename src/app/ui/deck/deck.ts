@@ -4,7 +4,7 @@ import { Card } from '../card/card';
 import { CommonModule } from '@angular/common';
 
 
-class DeckItem {
+export class DeckItem {
 	static uid = 0;
 	public uid:number;
 	public tag:string;
@@ -33,9 +33,16 @@ export class Deck {
 	selectable = input<boolean>(false);
 	faceDown = input<boolean>(null);
 	
-	cards = input<string[]>();
+	cards = input<string[] | DeckItem[]>();
 
-	list = linkedSignal<DeckItem[]>(()=>this.cards().map(c=>new DeckItem(c, this.faceDown())));
+	list = linkedSignal<DeckItem[]>(()=>{
+		return this.cards().map(c=>{
+			if (typeof(c)=="string") return new DeckItem(c, this.faceDown());
+			return c;
+		})
+	});
+
+	
 
 	selectedSet = signal<Set<number>>(new Set());
 
@@ -81,6 +88,13 @@ export class Deck {
 		return taken
 	}
 
+	takeAll() {
+		return this.take(this.list().length);
+	}
 	
+	offsetCurve(index:number) {
+		const k = 0.1; 
+		return 10 * (1 - Math.exp(-k * index));
+	}
 	
 }

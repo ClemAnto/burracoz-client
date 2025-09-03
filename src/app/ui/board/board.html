@@ -7,15 +7,26 @@ BOARD
 	<button nz-button (click)="move()">MOVE</button>
 </header>
 
-<div class="flex gap-2 p-2">
-	<ui-tweener>
-		<ui-deck #tableDeck [cards]="tableCards()" [faceDown]="true" layout="stack"
-			class="outline outline-amber-500 min-w-[200px]"/>
+<div class="flex flex-col gap-2 p-2 max-w-full">
+	<ui-tweener [disabled]="!animate()">
+		<ui-deck #drawPile [cards]="tableCards()" [faceDown]="true" layout="stack"
+			(click)="willTakeFromDrawPile()"
+			class="z-1 outline outline-amber-500 min-w-[200px] h-[100px]">{{drawPile.list().length}}</ui-deck>
 
-		<ui-deck #discardDeck [cards]="discardCards()" layout="stack" [faceDown]="false"
-			class="outline outline-amber-500 min-w-[200px]"/>
+		<ui-deck #discardPile [cards]="discardCards()" layout="stack" [faceDown]="false"
+			(click)="willTakeDiscardPile()"
+			class="z-2 outline outline-amber-500 min-h-[100px]"/>
 
 		<ui-deck #myDeck [cards]="myCards()" [faceDown]="false" [selectable]="true"
-			class="outline outline-amber-500 min-w-[200px]"/>
+			class="z-3 outline outline-amber-500 min-h-[100px]"/>
+
+		<section class="outline outline-amber-500 min-w-[200px] min-h-[200px]" (click)="check()">
+			@for (meld of myMelds(); track $index) {
+				<ui-deck 
+					[style.--z]="$index + 4"
+					class="relative z-[var(--z)]"
+					[cards]="meld" [selectable]="false"/>
+			}
+		</section>	
 	</ui-tweener>
 </div>

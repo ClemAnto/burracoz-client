@@ -7,7 +7,7 @@
 		'grid': isStack
 	}">
 	@for (item of list(); track item.uid; let i = $index) {
-		@let offset = i * 1;
+		@let offset = offsetCurve(i);
 		<ui-card
 			[style.--offset.px]="offset"
 			[style.--z]="i"
@@ -15,7 +15,7 @@
 			class="z-[var(--z)]"
 			[ngClass]="{
 				'outline':selectedSet().has(item.uid),
-				'col-[1/1] row-[1/1] mt-[var(--offset)] ml-[var(--offset)]':isStack
+				'col-[1/1] row-[1/1] translate-x-[var(--offset)] translate-y-[var(--offset)]':isStack
 			}"
 			[attr.tween-id]="item.uid" 
 			[faceDown]="item.faceDown"
@@ -23,3 +23,6 @@
 	}
 </div>
 }
+
+len: {{list().length}}
+<ng-content />
