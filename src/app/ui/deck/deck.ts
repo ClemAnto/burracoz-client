@@ -8,11 +8,12 @@ class DeckItem {
 	static uid = 0;
 	public uid:number;
 	public tag:string;
+	public faceDown:boolean;
 
-	constructor(card:string) {
+	constructor(card:string, faceDown:boolean = false) {
 		this.uid = DeckItem.uid++;
 		this.tag = card;
-		
+		this.faceDown = faceDown;
 	}
 }
 
@@ -27,9 +28,14 @@ class DeckItem {
 })
 export class Deck {
 
+	layout = input<'stack' | 'grid'>('grid');
+
+	selectable = input<boolean>(false);
+	faceDown = input<boolean>(null);
+	
 	cards = input<string[]>();
 
-	list = linkedSignal<DeckItem[]>(()=>this.cards().map(c=>new DeckItem(c)));
+	list = linkedSignal<DeckItem[]>(()=>this.cards().map(c=>new DeckItem(c, this.faceDown())));
 
 	selectedSet = signal<Set<number>>(new Set());
 
@@ -43,6 +49,8 @@ export class Deck {
 	}
 
 	toggleItem(uid:number) {
+		if (!this.selectable()) return;
+
 		if (this.selectedSet().has(uid)) {
 			this.selectedSet().delete(uid);
 		} else {
@@ -58,9 +66,21 @@ export class Deck {
 		this.selectedSet.update(itemSet=>new Set(Array.from(itemSet).filter(uid=>!toRemove.some(toRemoveItem=>toRemoveItem.uid==uid))));
 	}
 
-	addItems(toAdd:DeckItem[]) {
-		if (!toAdd) return;
-		this.list.update(cards=>cards.concat(toAdd));
+	put(toPut:DeckItem[]) {
+		if (!toPut) return;
+		if (this.faceDown() !== null) {
+			toPut.forEach(item=>item.faceDown = this.faceDown());
+		}
+		this.list.update(cards=>cards.concat(toPut));
 	}
+
+	take(amount:number = 0):DeckItem[] {
+		const items = this.list();
+		const taken = items.splice(-amount, amount);
+		this.list.set(items);
+		return taken
+	}
+
+	
 	
 }

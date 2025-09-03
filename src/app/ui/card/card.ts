@@ -1,6 +1,7 @@
 import { Component, computed, input } from '@angular/core';
 import { CardValue, Suit } from '../../services/cards';
 import { SuitIcon } from '../suit-icon/suit-icon';
+import { CommonModule } from '@angular/common';
 
 type SimpleSuit = "h" | "d" | "s" | "c" | "♣️" | "♠️" | "♦️" | "♥️";
 
@@ -8,14 +9,19 @@ type SimpleSuit = "h" | "d" | "s" | "c" | "♣️" | "♠️" | "♦️" | "♥�
 @Component({
 	selector: 'ui-card',
 	imports: [
+		CommonModule,
 		SuitIcon
 	],
 	templateUrl: './card.html',
-	styleUrl: './card.scss'
+	styleUrl: './card.scss',
+	host: {
+		'[class]': `faceDown() ? 'rotate-y-180' : ''`
+	}
 })
 export class Card {
 
 
+	faceDown = input<boolean>();
 	card = input<string>();
 
 

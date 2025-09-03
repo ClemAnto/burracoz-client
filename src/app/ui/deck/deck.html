@@ -1,10 +1,24 @@
+@let isStack = layout() == 'stack';
+
 @if (cards()) {
-<div class="flex p-2 gap-2 flex-wrap">
-	@for (item of list(); track item.uid) {
+<div class="flex p-2 gap-2 flex-wrap"
+	[ngClass]="{
+		'flex p-2 gap-2 flex-wrap': layout() == 'grid',
+		'grid': isStack
+	}">
+	@for (item of list(); track item.uid; let i = $index) {
+		@let offset = i * 1;
 		<ui-card
+			[style.--offset.px]="offset"
+			[style.--z]="i"
 			(click)="toggleItem(item.uid)" 
-			[ngClass]="{'outline':selectedSet().has(item.uid)}"
+			class="z-[var(--z)]"
+			[ngClass]="{
+				'outline':selectedSet().has(item.uid),
+				'col-[1/1] row-[1/1] mt-[var(--offset)] ml-[var(--offset)]':isStack
+			}"
 			[attr.tween-id]="item.uid" 
+			[faceDown]="item.faceDown"
 			[card]="item.tag" />
 	}
 </div>

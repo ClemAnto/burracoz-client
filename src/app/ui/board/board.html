@@ -3,14 +3,19 @@ BOARD
 <header class="p-2 flex gap-2">
 
 	<button nz-button (click)="shuffle()">SHUFFLE</button>
+	<button nz-button (click)="start()">START</button>
 	<button nz-button (click)="move()">MOVE</button>
 </header>
 
 <div class="flex gap-2 p-2">
 	<ui-tweener>
-		<ui-deck #tableDeck [cards]="tableCards()"
+		<ui-deck #tableDeck [cards]="tableCards()" [faceDown]="true" layout="stack"
 			class="outline outline-amber-500 min-w-[200px]"/>
-		<ui-deck #myDeck [cards]="myCards()"
+
+		<ui-deck #discardDeck [cards]="discardCards()" layout="stack" [faceDown]="false"
+			class="outline outline-amber-500 min-w-[200px]"/>
+
+		<ui-deck #myDeck [cards]="myCards()" [faceDown]="false" [selectable]="true"
 			class="outline outline-amber-500 min-w-[200px]"/>
 	</ui-tweener>
 </div>

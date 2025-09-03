@@ -104,6 +104,7 @@ export class Tweener implements AfterViewInit {
 					node.classList.add('tweening');
 					node.ontransitionend = ()=>{
 						node.classList.remove('tweening');	
+						node.style.transition = "";
 						delete node.ontransitionend;
 					}
 					
