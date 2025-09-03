@@ -12,6 +12,7 @@ class DeckItem {
 	constructor(card:string) {
 		this.uid = DeckItem.uid++;
 		this.tag = card;
+		
 	}
 }
 

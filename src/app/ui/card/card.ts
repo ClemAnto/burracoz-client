@@ -39,5 +39,5 @@ export class Card {
 		return null;
 	})
 
-	value = computed<CardValue>(()=>(this.card() ?? '').split('')[0] as CardValue);
+	value = computed<CardValue>(()=>(this.card() ?? '').match(/[\w*]+/)[0] as CardValue);
 }

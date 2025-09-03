@@ -13,7 +13,7 @@ export class Tweener implements AfterViewInit {
 
 	private host = signal<HTMLElement>(null);
 	private mutations: MutationObserver
-	private hash:{[key:string]:string} = {};
+	private hash:{[key:string]:{data:any, timeoutId:any}} = {};
 
 	constructor(protected ref: ElementRef) {}
 
@@ -42,8 +42,14 @@ export class Tweener implements AfterViewInit {
 					if (node instanceof HTMLElement) {
 						const tweenId = node.getAttribute('tween-id');
 						if (tweenId) {
-							console.log("[TWEENER] REMOVED "+tweenId, node);
-							this.hash[tweenId] = node.getAttribute('pos');
+							console.log("[TWEENER] REMOVED "+tweenId, node);						
+							if (tweenId in this.hash) {
+								clearTimeout(this.hash[tweenId].timeoutId);
+							}
+							this.hash[tweenId] = {
+								data: node.getAttribute('pos'),
+								timeoutId: setTimeout(()=>delete this.hash[tweenId], 1000)
+							}
 						}
 					}
 				})
@@ -54,7 +60,8 @@ export class Tweener implements AfterViewInit {
 						const tweenId = node.getAttribute('tween-id');
 						if (tweenId && tweenId in this.hash) {
 							console.log("[TWEENER] ADDED "+tweenId, node);
-							node.setAttribute('pos', this.hash[tweenId]);
+							node.setAttribute('pos', this.hash[tweenId].data);
+							clearTimeout(this.hash[tweenId].timeoutId);
 							delete this.hash[tweenId];
 						}
 					}

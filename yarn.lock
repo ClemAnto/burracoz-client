@@ -218,6 +218,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@angular/animations@npm:^20.2.3":
+  version: 20.2.3
+  resolution: "@angular/animations@npm:20.2.3"
+  dependencies:
+    tslib: "npm:^2.3.0"
+  peerDependencies:
+    "@angular/common": 20.2.3
+    "@angular/core": 20.2.3
+  checksum: 10c0/0210e0c07cc825bd4bcc1f9bae38c2f453e1aa2d137f45eb00196fabc857d6ba412009be73417ba5c53bbd0c0daedfde53f247085996b97fda4a1842535ca2c8
+  languageName: node
+  linkType: hard
+
 "@angular/build@npm:^20.2.1":
   version: 20.2.1
   resolution: "@angular/build@npm:20.2.1"
@@ -2704,6 +2716,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "burracoz-client@workspace:."
   dependencies:
+    "@angular/animations": "npm:^20.2.3"
     "@angular/build": "npm:^20.2.1"
     "@angular/cli": "npm:^20.2.1"
     "@angular/common": "npm:^20.2.0"

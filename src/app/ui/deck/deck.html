@@ -1,5 +1,5 @@
 @if (cards()) {
-<div class="flex gap-2 flex-wrap">
+<div class="flex p-2 gap-2 flex-wrap">
 	@for (item of list(); track item.uid) {
 		<ui-card
 			(click)="toggleItem(item.uid)" 
