@@ -3,7 +3,19 @@
 
 	::ng-deep {
 		.tweening {
-			outline: 1px solid red;
+			
+			//outline: 1px solid red;
+			transition-property: all;
+			transition-duration: 1s;
+			transition-delay: calc((var(--tween-delay, 0) + var(--tween-scatter-delay, 0)) * 1ms);
+			transition-timing-function: ease;
+		}
+
+		.no-transitions {
+			&,
+			& * {
+				transition: none!important;
+			}
 		}
 	}
 }

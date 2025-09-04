@@ -1,7 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { Component, signal, ViewChild } from '@angular/core';
 import { NzButtonModule } from 'ng-zorro-antd/button';
+import { firstValueFrom, Subject } from 'rxjs';
 import { STARTER_DECK } from '../../services/cards';
+import { sleep } from '../../utils/rx';
 import { Deck, DeckItem } from '../deck/deck';
 import { Tweener } from "../tweener/tweener";
 
@@ -26,7 +28,10 @@ export class Board {
 	discardCards = signal<string[]>([]);
 	myCards = signal<string[]>([]);
 	myMelds = signal<DeckItem[][]>([])
-	animate = signal<boolean>(true)
+	animate = signal<boolean>(true);
+
+	animationComplete = new Subject<any>();
+	noMoreAnimations = new Subject<void>();
 
 	shuffle() {
 		this.drawPile.shuffle();
@@ -40,25 +45,37 @@ export class Board {
 		
 	}
 
-	start() {
-		this.animate.set(false);
+	async start() {
+		
 		//requestAnimationFrame(()=>{
 		this.drawPile.shuffle();
 		
-
-		this.animate.set(true);
+		
+		
 		const myCards = this.drawPile.take(11);
 		this.myDeck.put(myCards);
 
+		await sleep(500);
+
 		const [card] = this.drawPile.take(1);
 		this.discardPile.put([card]);
-			
+	
+		//await firstValueFrom(this.noMoreAnimations);
+		
 	}
 
-	check() {
+	async addMeld() {
 		const cards = this.myDeck.selecteds();
+		this.myDeck.freeze();
 		this.myDeck.removeItems(cards);
 		this.myMelds().push(cards);
+	}
+
+	attachToMeld(pile:Deck) {
+		const cards = this.myDeck.selecteds();
+		this.myDeck.freeze();
+		this.myDeck.removeItems(cards);
+		pile.put(cards);
 	}
 
 	willTakeDiscardPile() {
@@ -69,5 +86,10 @@ export class Board {
 	willTakeFromDrawPile() {
 		const cards = this.drawPile.take(1);
 		this.myDeck.put(cards);
+	}
+
+	onTweenComplete(tweenInfo:any) {
+		this.animationComplete.next(tweenInfo);
+		if (!tweenInfo.pendings) this.noMoreAnimations.next();
 	}
 }

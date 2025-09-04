@@ -14,8 +14,9 @@ type SimpleSuit = "h" | "d" | "s" | "c" | "♣️" | "♠️" | "♦️" | "♥�
 	],
 	templateUrl: './card.html',
 	styleUrl: './card.scss',
+	//'[class]': `faceDown() ? 'rotate-y-180' : ''`
 	host: {
-		'[class]': `faceDown() ? 'rotate-y-180' : ''`
+		'[style.--rot-y.deg]': "faceDown() ? 180 : 0"
 	}
 })
 export class Card {

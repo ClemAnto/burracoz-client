@@ -42,7 +42,7 @@ export class Deck {
 		})
 	});
 
-	
+	freezeds = signal<any>({})
 
 	selectedSet = signal<Set<number>>(new Set());
 
@@ -97,4 +97,13 @@ export class Deck {
 		return 10 * (1 - Math.exp(-k * index));
 	}
 	
+	
+	freeze() {
+		const freezeds:any = {};
+		this.list().forEach(item=>{
+			if (this.selectedSet().has(item.uid)) return;
+			freezeds[item.uid] = 500;
+		})
+		this.freezeds.set(freezeds)
+	}
 }

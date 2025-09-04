@@ -1,0 +1,9 @@
+:host {
+	ui-card {
+		::ng-deep {
+			> * {
+				transition: all 1s;
+			}
+		}
+	}
+}

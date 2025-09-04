@@ -8,11 +8,12 @@ BOARD
 </header>
 
 <div class="flex flex-col gap-2 p-2 max-w-full">
-	<ui-tweener [disabled]="!animate()">
+	<ui-tweener [disabled]="!animate()" 
+		(tweenComplete)="onTweenComplete($event)">
 		<ui-deck #drawPile [cards]="tableCards()" [faceDown]="true" layout="stack"
 			(click)="willTakeFromDrawPile()"
-			class="z-1 outline outline-amber-500 min-w-[200px] h-[100px]">{{drawPile.list().length}}</ui-deck>
-
+			class="z-1 outline outline-amber-500 min-w-[200px] h-[100px]" />
+			
 		<ui-deck #discardPile [cards]="discardCards()" layout="stack" [faceDown]="false"
 			(click)="willTakeDiscardPile()"
 			class="z-2 outline outline-amber-500 min-h-[100px]"/>
@@ -20,12 +21,14 @@ BOARD
 		<ui-deck #myDeck [cards]="myCards()" [faceDown]="false" [selectable]="true"
 			class="z-3 outline outline-amber-500 min-h-[100px]"/>
 
-		<section class="outline outline-amber-500 min-w-[200px] min-h-[200px]" (click)="check()">
+		<section class="outline outline-amber-500 min-w-[200px] min-h-[200px]" (click)="addMeld()">
 			@for (meld of myMelds(); track $index) {
 				<ui-deck 
+					#meldPile
 					[style.--z]="$index + 4"
 					class="relative z-[var(--z)]"
-					[cards]="meld" [selectable]="false"/>
+					[cards]="meld" [selectable]="false"
+					(click)="attachToMeld(meldPile); $event.stopPropagation()"/>
 			}
 		</section>	
 	</ui-tweener>

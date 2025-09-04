@@ -1,5 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { AfterContentInit, AfterViewInit, Component, ElementRef, input, signal } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, input, output, signal } from '@angular/core';
+
+
+const {round} = Math;
 
 @Component({
 	selector: 'ui-tweener',
@@ -14,12 +17,17 @@ export class Tweener implements AfterViewInit {
 	private host = signal<HTMLElement>(null);
 	private mutations: MutationObserver
 	private hash:{[key:string]:{
-		from:any,
+		from: any,
+		data: any,
 		target: any 
 		timeoutId:any
 	}} = {};
 
 	disabled = input<boolean>(false);
+
+	pendings = 0;
+	tweenComplete = output<any>();
+	allTweenCompleteds = output<any>();
 
 	constructor(protected ref: ElementRef) {}
 
@@ -55,6 +63,7 @@ export class Tweener implements AfterViewInit {
 							this.hash[tweenId] = {
 								...this.hash[tweenId],
 								from: tweener.getAttribute('pos'),
+								data: tweener.getAttribute('tween-data')
 							}
 						});
 					}
@@ -97,6 +106,7 @@ export class Tweener implements AfterViewInit {
 				clearTimeout(this.hash[tweenId].timeoutId);
 				tween.timeoutId = setTimeout(()=>this.clearTween(tweenId), 2000);
 				tween.target.setAttribute('pos', tween.from);
+				tween.target.setAttribute('tween-data-prev', tween.data);
 			}
 		})
 	}
@@ -114,18 +124,28 @@ export class Tweener implements AfterViewInit {
 
 	refreshPositions() {
 		var count = 0;
-		this.host().querySelectorAll("[tween-id]").forEach(node=>{
+		this.host().querySelectorAll("[tween-id]:not(.tweening)").forEach(node=>{
 			if (node instanceof HTMLElement) {
 				const tweenId = node.getAttribute("tween-id");
 				const tweening = node.classList.contains('tweening');
 				if (tweening) {
-					node.style.transition = "none";
+
+					//LA POSIZIONE DEL NODO E' IN TRANSIZIONE
+					//CHE SUCCEDE IN QUESTO CASO?
+					debugger
+				}
+				/*
+				if (tweening) {
+					//node.style.transition = "none";
+					node.classList.add('no-transitions');	
 					node.style.translate = "";
 					node.classList.remove('tweening');	
+					node.removeAttribute("tween-data");
+					node.removeAttribute("tween-data-prev");
 					delete node.ontransitionend;
 					//this.clearTween(tweenId);
 				} 
-				
+				*/
 				var {x,y} = node.getBoundingClientRect();
 				const prevPos = node.getAttribute("pos");
 				if (prevPos) {
@@ -134,33 +154,95 @@ export class Tweener implements AfterViewInit {
 					const dx = +ox-x;
 					const dy = +oy-y;
 					
-					if (!Math.round(dx) && !Math.round(dy)) return;
+					if (!round(dx) && !round(dy)) return;
 
-					node.style.transition = "none";
+					//node.style.transition = "none";
+					node.classList.add('no-transitions');	
 					node.style.translate = `${dx}px ${dy}px`;
+
+					const tweenData = JSON.parse(node.getAttribute("tween-data-prev") || '{}');
+					for (let key in tweenData) {
+						//console.log("[TWEENER] set key " + key + " --> " + tweenData[key]);
+						node.style.setProperty(key, tweenData[key]);
+					}
+					
 					node.classList.add('tweening');
 					this.clearTween(tweenId);
 
-					node.ontransitionend = ()=>{
+			
+					onAllTransitionsDone(node, ()=>{
 						node.classList.remove('tweening');	
-						node.style.transition = "";
-						var {x,y} = node.getBoundingClientRect();
-						node.setAttribute("dest", `${x},${y}`);
+						node.removeAttribute("tween-data");
+						node.removeAttribute("tween-data-prev");
 						delete node.ontransitionend;
-					}
+						this.pendings--;
+						this.tweenComplete.emit({id:tweenId, target:node, pendings:this.pendings});
+					})
+
+					node.ontransitionrun
 					
 					requestAnimationFrame(()=>{
-						const delay = 0 //Math.min(1000,count*100);
-						node.style.transition = `translate 1s ease ${delay}ms`;
+						//const delay = 1000 //Math.min(1000,count*100);
+						//node.style.transition = `all 3s ease ${delay}ms`;
+						node.classList.remove('no-transitions');
 						count++;
+						this.pendings++;
 						node.style.translate = "";
+						node.style.setProperty('--tween-scatter-delay', `${count*10}`);
+						for (let key in tweenData) {
+							node.style.setProperty(key, '');
+						}
 					});
 					
 				} 
-				node.setAttribute("pos", `${x},${y}`);
+				node.setAttribute("pos", `${round(x)},${round(y)}`);
+				
 				
 			}
 		})
 	}
 
+}
+
+
+function onAllTransitionsDone(el: HTMLElement, callback: Function, { once = true } = {}) {
+	let pending = 0;
+	let running = false;
+
+	const onStart = (e: TransitionEvent) => {
+		// Evita di contare transizioni di elementi figli
+		if (e.target !== el) return;
+		running = true;
+		pending++;
+	};
+
+	const onFinish = (e: TransitionEvent) => {
+		if (e.target !== el) return;
+		if (pending > 0) pending--;
+		if (running && pending === 0) {
+			cleanup();
+			callback();
+		}
+	};
+
+	const cleanup = () => {
+		el.removeEventListener("transitionstart", onStart);
+		el.removeEventListener("transitionend", onFinish);
+		el.removeEventListener("transitioncancel", onFinish);
+	};
+
+	el.addEventListener("transitionstart", onStart);
+	el.addEventListener("transitionend", onFinish);
+	el.addEventListener("transitioncancel", onFinish);
+
+	if (once) {
+		// opzionale: rimuovi automaticamente dopo il primo giro
+		const originalCb = callback;
+		callback = () => {
+			cleanup();
+			originalCb();
+		};
+	}
+
+	return () => cleanup(); // per annullare manualmente se serve
 }

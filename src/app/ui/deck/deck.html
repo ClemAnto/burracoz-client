@@ -7,17 +7,19 @@
 		'grid': isStack
 	}">
 	@for (item of list(); track item.uid; let i = $index) {
-		@let offset = offsetCurve(i);
+		@let offset = isStack ? offsetCurve(i) : 0;
 		<ui-card
-			[style.--offset.px]="offset"
+			[style.--offset.px]="offset * (item.faceDown ? 1 : -1)"
 			[style.--z]="i"
 			(click)="toggleItem(item.uid)" 
-			class="z-[var(--z)]"
+			class="z-[var(--z)] [&>*]:translate-z-[calc(var(--prev-offset,var(--offset)))]"
 			[ngClass]="{
 				'outline':selectedSet().has(item.uid),
-				'col-[1/1] row-[1/1] translate-x-[var(--offset)] translate-y-[var(--offset)]':isStack
+				'col-[1/1] row-[1/1]':isStack
 			}"
+			[style.--tween-delay]="freezeds()[item.uid]" 
 			[attr.tween-id]="item.uid" 
+			[attr.tween-data]="{'--z':i, '--prev-rot-y':item.faceDown ? '180deg' : '', '--prev-offset':offset+'px'} | json" 
 			[faceDown]="item.faceDown"
 			[card]="item.tag" />
 	}
