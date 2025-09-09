@@ -65,7 +65,9 @@ export class Board {
 	}
 
 	async addMeld() {
-		const cards = this.myDeck.selecteds();
+		const cards = this.myDeck.validateLayOff();
+		if (!cards) return;
+		
 		this.myDeck.freeze();
 		this.myDeck.removeItems(cards);
 		this.myMelds().push(cards);
@@ -73,9 +75,12 @@ export class Board {
 
 	attachToMeld(pile:Deck) {
 		const cards = this.myDeck.selecteds();
+		pile.willAttach(cards);
+		/*
 		this.myDeck.freeze();
 		this.myDeck.removeItems(cards);
 		pile.put(cards);
+		*/
 	}
 
 	willTakeDiscardPile() {

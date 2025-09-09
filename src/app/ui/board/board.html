@@ -19,7 +19,9 @@ BOARD
 			class="z-2 outline outline-amber-500 min-h-[100px]"/>
 
 		<ui-deck #myDeck [cards]="myCards()" [faceDown]="false" [selectable]="true"
-			class="z-3 outline outline-amber-500 min-h-[100px]"/>
+			class="z-3 outline outline-amber-500 min-h-[100px]">
+		</ui-deck>
+		
 
 		<section class="outline outline-amber-500 min-w-[200px] min-h-[200px]" (click)="addMeld()">
 			@for (meld of myMelds(); track $index) {

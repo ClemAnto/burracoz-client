@@ -114,11 +114,11 @@ export class Tweener implements AfterViewInit {
 	clearTween(tweenId:string) {
 		if (!(tweenId in this.hash)) return;
 		
-		console.log("[TWEENER] clear tween "+tweenId);
+		//console.log("[TWEENER] clear tween "+tweenId);
 		clearTimeout(this.hash[tweenId].timeoutId);
 		delete this.hash[tweenId];
 		//console.log("[TWEENER] clear tween "+tweenId+", remainings "+Object.values(this.hash).length+"...",this.hash)
-		console.log("[TWEENER] clear tween "+tweenId+", remainings "+Object.values(this.hash).length)
+		//console.log("[TWEENER] clear tween "+tweenId+", remainings "+Object.values(this.hash).length)
 	
 	}
 
