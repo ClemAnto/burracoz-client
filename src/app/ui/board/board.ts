@@ -75,12 +75,13 @@ export class Board {
 
 	attachToMeld(pile:Deck) {
 		const cards = this.myDeck.selecteds();
-		pile.willAttach(cards);
-		/*
-		this.myDeck.freeze();
-		this.myDeck.removeItems(cards);
-		pile.put(cards);
-		*/
+		const newMeld = pile.willAttach(cards);
+		
+		if (newMeld) {
+			this.myDeck.freeze();
+			this.myDeck.removeItems(cards);
+		}
+		
 	}
 
 	willTakeDiscardPile() {

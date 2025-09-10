@@ -138,9 +138,13 @@ export class Deck {
 		this.freezeds.set(freezeds)
 	}
 
+	
+
 
 	willAttach(cards:DeckItem[]) {
-		this.Rules.validateMeld(cards, this.list());
+		const newList = this.Rules.validateMeld(cards, this.list());
+		if (newList) this.list.set(newList);
+		return newList;
 	}
 
 	validateLayOff():DeckItem[] {
