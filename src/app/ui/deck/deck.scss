@@ -1,5 +1,11 @@
 :host {
 	ui-card {
+
+		//--h: calc(var(--spacing, 0.25rem) * 10);
+		//--w: calc(var(--spacing, 0.25rem) * 8);
+		//height: calc(sin(var(--rotate, 0) * 3.14) + cos(var(--rotate, 0) * 3.14));
+		//width:  calc(cos(var(--rotate, 0) * 3.14) + sin(var(--rotate, 0) * 3.14));
+
 		::ng-deep {
 			> * {
 				transition: all 1s;

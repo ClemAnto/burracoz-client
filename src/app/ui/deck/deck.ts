@@ -34,7 +34,10 @@ export class DeckItem {
     	Card,
 	],
 	templateUrl: './deck.html',
-	styleUrl: './deck.scss'
+	styleUrl: './deck.scss',
+	host: {
+		'[style.--rotate.deg]': 'rotate()'
+	}
 })
 export class Deck {
 
@@ -42,6 +45,7 @@ export class Deck {
 
 	selectable = input<boolean>(false);
 	faceDown = input<boolean>(null);
+	rotate = input<number>(null);
 	
 	cards = input<string[] | DeckItem[]>();
 

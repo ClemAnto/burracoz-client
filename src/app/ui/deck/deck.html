@@ -1,6 +1,6 @@
 @let isStack = layout() == 'stack';
 
-selectedSet: {{selecteds().length}}
+
 
 @if (cards()) { 
 <div class="flex p-2 gap-2 flex-wrap"
@@ -14,7 +14,7 @@ selectedSet: {{selecteds().length}}
 			[style.--offset.px]="offset * (item.faceDown ? 1 : -1)"
 			[style.--z]="i"
 			(click)="toggleItem(item.uid)" 
-			class="rounded-md z-[var(--z)] [&>*]:translate-z-[calc(var(--prev-offset,var(--offset)))]"
+			class="rounded-md z-[var(--z)] rotate-[var(--rotate)] [&>*]:translate-z-[calc(var(--prev-offset,var(--offset)))]"
 			[ngClass]="{
 				'outline':selectedSet().has(item.uid),
 				'col-[1/1] row-[1/1]':isStack
@@ -28,5 +28,5 @@ selectedSet: {{selecteds().length}}
 </div>
 }
 
-len: {{list().length}}
+
 <ng-content />

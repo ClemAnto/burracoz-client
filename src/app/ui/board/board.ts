@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, signal, ViewChild } from '@angular/core';
 import { NzButtonModule } from 'ng-zorro-antd/button';
-import { firstValueFrom, Subject } from 'rxjs';
+import { Subject } from 'rxjs';
 import { STARTER_DECK } from '../../services/cards';
 import { sleep } from '../../utils/rx';
 import { Deck, DeckItem } from '../deck/deck';
@@ -15,19 +15,30 @@ import { Tweener } from "../tweener/tweener";
 		Deck,
 		Tweener
 	],
-	templateUrl: './board.html'
+	templateUrl: './board.html',
+	host: {
+		class: "flex flex-col h-full w-full"
+	}
 })
 export class Board {
 	@ViewChild("drawPile") drawPile:Deck;
 	@ViewChild("discardPile") discardPile:Deck;
 	@ViewChild("myDeck") myDeck:Deck;
+	@ViewChild("northDeck") northDeck:Deck;
+	@ViewChild("eastDeck") eastDeck:Deck;
+	@ViewChild("westDeck") westDeck:Deck;
 
 	//tableDeck: string[] = shuffle(STARTER_DECK);
 	tableCards = signal<string[]>(STARTER_DECK.concat(STARTER_DECK));
 	//tableCards = signal<string[]>(STARTER_DECK);
 	discardCards = signal<string[]>([]);
+	northCards = signal<string[]>([]);
+	eastCards = signal<string[]>([]);
+	westCards = signal<string[]>([]);
+
 	myCards = signal<string[]>([]);
-	myMelds = signal<DeckItem[][]>([])
+	ourMelds = signal<DeckItem[][]>([])
+	theirMelds = signal<DeckItem[][]>([])
 	animate = signal<boolean>(true);
 
 	animationComplete = new Subject<any>();
@@ -50,10 +61,22 @@ export class Board {
 		//requestAnimationFrame(()=>{
 		this.drawPile.shuffle();
 		
+		var count = 11;
+		while (count--) {
+			const north = this.drawPile.take(1);
+			this.northDeck.put(north);
+
+			const east = this.drawPile.take(1);
+			this.eastDeck.put(east);
+
+			const my = this.drawPile.take(1);
+			this.myDeck.put(my);
+
+			const west = this.drawPile.take(1);
+			this.westDeck.put(west);
+		}
 		
 		
-		const myCards = this.drawPile.take(11);
-		this.myDeck.put(myCards);
 
 		await sleep(500);
 
@@ -70,7 +93,7 @@ export class Board {
 		
 		this.myDeck.freeze();
 		this.myDeck.removeItems(cards);
-		this.myMelds().push(cards);
+		this.ourMelds().push(cards);
 	}
 
 	attachToMeld(pile:Deck) {
