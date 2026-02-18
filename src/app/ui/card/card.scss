@@ -1,9 +1,7 @@
-
 @reference "tailwindcss";
 
 :host {
 	@apply w-8 h-10 select-none transform-3d perspective-origin-[200px] perspective-[200px];
 
-	
 	transform: rotateY(var(--prev-rot-y, var(--rot-y)));
 }

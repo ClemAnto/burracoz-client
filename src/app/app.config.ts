@@ -1,4 +1,9 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners, provideZonelessChangeDetection, importProvidersFrom } from '@angular/core';
+import {
+	ApplicationConfig,
+	provideBrowserGlobalErrorListeners,
+	provideZonelessChangeDetection,
+	importProvidersFrom,
+} from '@angular/core';
 import { provideRouter } from '@angular/router';
 
 import { routes } from './app.routes';
@@ -12,9 +17,13 @@ import { provideHttpClient } from '@angular/common/http';
 registerLocaleData(it);
 
 export const appConfig: ApplicationConfig = {
-  providers: [
-    provideBrowserGlobalErrorListeners(),
-    provideZonelessChangeDetection(),
-    provideRouter(routes), provideNzI18n(it_IT), importProvidersFrom(FormsModule), provideAnimationsAsync(), provideHttpClient()
-  ]
+	providers: [
+		provideBrowserGlobalErrorListeners(),
+		provideZonelessChangeDetection(),
+		provideRouter(routes),
+		provideNzI18n(it_IT),
+		importProvidersFrom(FormsModule),
+		provideAnimationsAsync(),
+		provideHttpClient(),
+	],
 };

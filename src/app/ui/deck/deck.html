@@ -1,32 +1,38 @@
 @let isStack = layout() == 'stack';
 
-
-
-@if (cards()) { 
-<div class="flex p-2 gap-2 flex-wrap"
-	[ngClass]="{
-		'flex p-2 gap-2 flex-wrap': layout() == 'grid',
-		'grid': isStack
-	}">
-	@for (item of list(); track item.uid; let i = $index) {
-		@let offset = isStack ? offsetCurve(i) : 0;
-		<ui-card
-			[style.--offset.px]="offset * (item.faceDown ? 1 : -1)"
-			[style.--z]="i"
-			(click)="toggleItem(item.uid)" 
-			class="rounded-md z-[var(--z)] rotate-[var(--rotate)] [&>*]:translate-z-[calc(var(--prev-offset,var(--offset)))]"
-			[ngClass]="{
-				'outline':selectedSet().has(item.uid),
-				'col-[1/1] row-[1/1]':isStack
-			}"
-			[style.--tween-delay]="freezeds()[item.uid]" 
-			[attr.tween-id]="item.uid" 
-			[attr.tween-data]="{'--z':i, '--prev-rot-y':item.faceDown ? '180deg' : '', '--prev-offset':offset+'px'} | json" 
-			[faceDown]="item.faceDown"
-			[card]="item.tag" />
-	}
-</div>
+@if (cards()) {
+	<div
+		class="flex p-2 gap-2 flex-wrap"
+		[ngClass]="{
+			'flex p-2 gap-2 flex-wrap': layout() == 'grid',
+			grid: isStack,
+		}"
+	>
+		@for (item of list(); track item.uid; let i = $index) {
+			@let offset = isStack ? offsetCurve(i) : 0;
+			<ui-card
+				[style.--offset.px]="offset * (item.faceDown ? 1 : -1)"
+				[style.--z]="i"
+				(click)="toggleItem(item.uid)"
+				class="rounded-md z-[var(--z)] rotate-[var(--rotate)] [&>*]:translate-z-[calc(var(--prev-offset,var(--offset)))]"
+				[ngClass]="{
+					outline: selectedSet().has(item.uid),
+					'col-[1/1] row-[1/1]': isStack,
+				}"
+				[style.--tween-delay]="freezeds()[item.uid]"
+				[attr.tween-id]="item.uid"
+				[attr.tween-data]="
+					{
+						'--z': i,
+						'--prev-rot-y': item.faceDown ? '180deg' : '',
+						'--prev-offset': offset + 'px',
+					} | json
+				"
+				[faceDown]="item.faceDown"
+				[card]="item.tag"
+			/>
+		}
+	</div>
 }
-
 
 <ng-content />

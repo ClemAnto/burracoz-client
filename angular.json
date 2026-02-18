@@ -27,10 +27,7 @@
 						"tsConfig": "tsconfig.app.json",
 						"inlineStyleLanguage": "scss",
 						"stylePreprocessorOptions": {
-							"includePaths": [
-								"src/styles/theme",
-								"src/styles/prod"
-							]
+							"includePaths": ["src/styles/theme", "src/styles/prod"]
 						},
 						"assets": [
 							{
@@ -51,7 +48,7 @@
 						"scripts": [],
 						"allowedCommonJsDependencies": [],
 						"loader": {
-          					".svg": "text"
+							".svg": "text"
 						}
 					},
 					"configurations": {
@@ -60,10 +57,7 @@
 						},
 						"development": {
 							"stylePreprocessorOptions": {
-								"includePaths": [
-									"src/styles/theme",
-									"src/styles/dev"
-								]
+								"includePaths": ["src/styles/theme", "src/styles/dev"]
 							},
 							"optimization": false,
 							"extractLicenses": false,
@@ -104,9 +98,7 @@
 								"input": "public"
 							}
 						],
-						"styles": [
-							"src/styles/styles.scss"
-						]
+						"styles": ["src/styles/styles.scss"]
 					}
 				}
 			}

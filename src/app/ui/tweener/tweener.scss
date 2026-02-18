@@ -3,7 +3,6 @@
 
 	::ng-deep {
 		.tweening {
-			
 			//outline: 1px solid red;
 			transition-property: all;
 			transition-duration: 1s;
@@ -15,7 +14,7 @@
 		.no-transitions {
 			&,
 			& * {
-				transition: none!important;
+				transition: none !important;
 			}
 		}
 	}

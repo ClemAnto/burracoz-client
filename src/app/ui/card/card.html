@@ -1,11 +1,12 @@
-<figure class="m-0 flex justify-center items-center h-full rounded-md border border-solid bg-white select-none">
-@if (value() == "*") {
-	<span>👑</span>
-} @else {
-	<span>{{value()}}</span>
-	<ui-suit-icon [suit]="suit()" />
-}
+<figure
+	class="m-0 flex justify-center items-center h-full rounded-md border border-solid bg-white select-none"
+>
+	@if (value() == '*') {
+		<span>👑</span>
+	} @else {
+		<span>{{ value() }}</span>
+		<ui-suit-icon [suit]="suit()" />
+	}
 </figure>
 
 <figure class="absolute inset-0 bg-cyan-800 !m-0 rotate-y-180 backface-hidden rounded-md"></figure>
-

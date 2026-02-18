@@ -1,48 +1,47 @@
 BOARD
 
 <header class="p-2 flex gap-2">
-
 	<button nz-button (click)="shuffle()">SHUFFLE</button>
 	<button nz-button (click)="start()">START</button>
 	<button nz-button (click)="move()">MOVE</button>
 </header>
 
 <div class="flex flex-col gap-2 p-2 max-w-full outline outline-blue-600 grow">
-	<ui-tweener [disabled]="!animate()" 
-		(tweenComplete)="onTweenComplete($event)">
-
-		
+	<ui-tweener [disabled]="!animate()" (tweenComplete)="onTweenComplete($event)">
 		<header class="min-h-[40px] w-full outline outline-amber-500">
-			<ui-deck #northDeck [cards]="northCards()" [faceDown]="true" layout="stack"
-				class="z-3">
+			<ui-deck #northDeck [cards]="northCards()" [faceDown]="true" layout="stack" class="z-3">
 			</ui-deck>
 		</header>
-		
+
 		<section id="melds" class="grid grid-cols-[40px_1fr_1fr_40px] gap-2 grow">
 			<div class="flex items-center outline outline-amber-500">
 				<ui-deck #eastDeck [cards]="eastCards()" [faceDown]="true" layout="stack">
 				</ui-deck>
 			</div>
 
-			<div class="outline  outline-amber-500" (click)="addMeld()">
+			<div class="outline outline-amber-500" (click)="addMeld()">
 				@for (meld of ourMelds(); track $index) {
-					<ui-deck 
+					<ui-deck
 						#meldPile
 						[style.--z]="$index + 4"
 						class="relative z-[var(--z)]"
-						[cards]="meld" [selectable]="false"
-						(click)="attachToMeld(meldPile); $event.stopPropagation()"/>
+						[cards]="meld"
+						[selectable]="false"
+						(click)="attachToMeld(meldPile); $event.stopPropagation()"
+					/>
 				}
-			</div>	
+			</div>
 
 			<div class="outline outline-amber-500" (click)="addMeld()">
-				@for (meld of theirMelds(); track $index) { 
-					<ui-deck 
+				@for (meld of theirMelds(); track $index) {
+					<ui-deck
 						#meldPile
 						[style.--z]="$index + 4"
 						class="relative z-[var(--z)]"
-						[cards]="meld" [selectable]="false"
-						(click)="attachToMeld(meldPile); $event.stopPropagation()"/>
+						[cards]="meld"
+						[selectable]="false"
+						(click)="attachToMeld(meldPile); $event.stopPropagation()"
+					/>
 				}
 			</div>
 
@@ -53,21 +52,32 @@ BOARD
 		</section>
 
 		<footer class="flex gap-4">
-			
-
-			<ui-deck #drawPile [cards]="tableCards()" [faceDown]="true" layout="stack"
+			<ui-deck
+				#drawPile
+				[cards]="tableCards()"
+				[faceDown]="true"
+				layout="stack"
 				(click)="willTakeFromDrawPile()"
-				class="z-1 outline outline-amber-500" />
-				
-			<ui-deck #discardPile [cards]="discardCards()" layout="stack" [faceDown]="false"
-				(click)="willTakeDiscardPile()"
-				class="z-2 outline outline-amber-500 grow"/>
+				class="z-1 outline outline-amber-500"
+			/>
 
-			
+			<ui-deck
+				#discardPile
+				[cards]="discardCards()"
+				layout="stack"
+				[faceDown]="false"
+				(click)="willTakeDiscardPile()"
+				class="z-2 outline outline-amber-500 grow"
+			/>
 		</footer>
 
-		<ui-deck #myDeck [cards]="myCards()" [faceDown]="false" [selectable]="true"
-			class="z-3 outline outline-amber-500 min-h-[100px]">
+		<ui-deck
+			#myDeck
+			[cards]="myCards()"
+			[faceDown]="false"
+			[selectable]="true"
+			class="z-3 outline outline-amber-500 min-h-[100px]"
+		>
 		</ui-deck>
 	</ui-tweener>
 </div>
