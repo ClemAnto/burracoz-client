@@ -1,11 +1,11 @@
-import { CommonModule } from '@angular/common';
+
 import { AfterViewInit, Component, ElementRef, input, output, signal } from '@angular/core';
 
 const { round } = Math;
 
 @Component({
 	selector: 'ui-tweener',
-	imports: [CommonModule],
+	imports: [],
 	templateUrl: './tweener.html',
 	styleUrl: './tweener.scss',
 })

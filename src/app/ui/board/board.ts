@@ -1,4 +1,4 @@
-import { CommonModule } from '@angular/common';
+
 import { Component, signal, ViewChild } from '@angular/core';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { Subject } from 'rxjs';
@@ -9,7 +9,7 @@ import { Tweener } from '../tweener/tweener';
 
 @Component({
 	selector: 'ui-board',
-	imports: [CommonModule, NzButtonModule, Deck, Tweener],
+	imports: [NzButtonModule, Deck, Tweener],
 	templateUrl: './board.html',
 	host: {
 		class: 'flex flex-col h-full w-full',

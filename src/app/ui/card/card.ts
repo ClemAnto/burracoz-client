@@ -1,13 +1,13 @@
 import { Component, computed, input } from '@angular/core';
 import { CardValue, Suit } from '../../services/cards';
 import { SuitIcon } from '../suit-icon/suit-icon';
-import { CommonModule } from '@angular/common';
+
 
 type SimpleSuit = 'h' | 'd' | 's' | 'c' | '♣️' | '♠️' | '♦️' | '♥️';
 
 @Component({
 	selector: 'ui-card',
-	imports: [CommonModule, SuitIcon],
+	imports: [SuitIcon],
 	templateUrl: './card.html',
 	styleUrl: './card.scss',
 	//'[class]': `faceDown() ? 'rotate-y-180' : ''`
