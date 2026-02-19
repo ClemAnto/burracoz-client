@@ -1,23 +1,23 @@
 import { Injectable } from '@angular/core';
-import { DeckItem } from '../ui/deck/deck';
+import { DeckItem, DeckItems } from '../ui/deck/deck';
 import { getCardRank, howMany } from './cards';
 
-type MeldInput = DeckItem[] | string;
+type MeldInput = DeckItems | DeckItem[] | string;
 
 @Injectable({
 	providedIn: 'root',
 })
 export class Rules {
-	validateMeld(layOffCards: MeldInput, tableCards?: MeldInput) {
+	validateMeld(layOffCards: MeldInput, tableCards?: MeldInput): DeckItems | null {
 		return (
 			this.validateSet(layOffCards, tableCards) || this.validateRun(layOffCards, tableCards)
 		);
 	}
 
-	validateSet(layOffCards: MeldInput, tableCards?: MeldInput) {
-		const cards = this.toDeckItems(layOffCards)
-			.concat(this.toDeckItems(tableCards))
-			.sort((a, b) => +isWild(a) - +isWild(b));
+	validateSet(layOffCards: MeldInput, tableCards?: MeldInput): DeckItems | null {
+		const cards = DeckItems.fromArray(
+			this.toDeckItems(layOffCards).concat(this.toDeckItems(tableCards)),
+		).sort((a, b) => +isWild(a) - +isWild(b));
 
 		//NOT ENOUGH CARDS?
 		if (cards.length < 3) return null;
@@ -34,26 +34,29 @@ export class Rules {
 		//TOO MANY EQUAL CARDS!
 		if (naturals.some((c) => howMany(c, naturals) > 2)) return null;
 
-		console.log('[RULES] Set validated: ' + cards);
+		//console.log('[RULES] Set validated: ' + cards);
 		return cards;
 	}
 
-	validateRun(layOffCards: MeldInput, tableCards?: MeldInput) {
-		//CartType
-		console.log('[RULES] Validate Run...');
+	validateRun(layOffCards: MeldInput, tableCards?: MeldInput): DeckItems | null {
+		//CardType
+		//console.log('[RULES] Validate Run...');
 
-		
 		//1) Se nelle tableCards c'è un jolly e nelle layOffCards c'è la carta che lo può liberare,
 		//	 questa prende il suo posto ed il jolly va nelle layOffCards
 		//2) Un 2 naturale, se non ci sono altri jollu in tableCards, è mobile e va nelle layOffCards
 		//3) I jolly liberi occupano sempre la posizione più bassa a meno che non sia presente già un A
 		//	 ed in quel caso il jolly andrà nella posizione più alta
-		
-		const cards = this.toDeckItems(layOffCards).concat(this.toDeckItems(tableCards));
 
+		const cards = DeckItems.fromArray(
+			this.toDeckItems(layOffCards).concat(this.toDeckItems(tableCards)),
+		);
+
+		const aceHigh = aceMayBeHigh(cards);
+		
 		const naturals = cards
 			.filter((c) => !isWild(c))
-			.sort((a, b) => getCardRank(a.value) - getCardRank(b.value));
+			.sort((a, b) => getCardRank(a.value, aceHigh) - getCardRank(b.value, aceHigh));
 
 		//ENOUGH NATURALS?
 		if (!naturals.length) return null;
@@ -65,7 +68,7 @@ export class Rules {
 		const wildVal = (card: DeckItem) => (card.value == '2' && card.suit == suit ? 1 : 0);
 		const wilds = cards.filter(isWild).sort((a, b) => wildVal(a) - wildVal(b));
 
-		const run = [naturals.shift()];
+		const run = DeckItems.fromArray([naturals.shift()]);
 
 		const suit2index = wilds.findIndex((w) => w.value == '2' && w.suit == suit);
 		if (run[0].value == 'A') {
@@ -85,7 +88,7 @@ export class Rules {
 			const nextCard = naturals.shift();
 			if (!nextCard) break;
 
-			const gap = getCardRank(nextCard.value) - getCardRank(run[0].value);
+			const gap = getCardRank(nextCard.value, aceHigh) - getCardRank(run[0].value, aceHigh);
 
 			//GAP TOO HIGH?
 			if (gap > 2) return null; //GAP TOO HIGH
@@ -126,20 +129,45 @@ export class Rules {
 		//NOT ENOUGH CARD?
 		if (run.length < 3) return null;
 
-		console.log('[RULES] Run validated: ' + run);
+		//console.log('[RULES] Run validated: ' + run);
 		return run;
 	}
 
-	private toDeckItems(cards?: MeldInput): DeckItem[] {
-		if (!cards) return [];
+	private toDeckItems(cards?: MeldInput): DeckItems {
+		if (!cards) return new DeckItems();
+		if (cards instanceof DeckItems) return cards;
 		if (typeof cards == 'string') {
-			const tokenPattern = /(?:10|[2-9AJQK])(?:♥️|♦️|♠️|♣️)|\*|🃏(?:♥️|♦️|♠️|♣️)?/gu;
-			return (cards.match(tokenPattern) ?? []).map((tag) => new DeckItem(tag));
+			const tokenPattern =
+				/(?:10|[2-9AJQK])(?:♥️|♦️|♠️|♣️)|(?:\*|🃏)(?:⚫|🔴|♥️|♦️|♠️|♣️)?/gu;
+			return DeckItems.fromArray(
+				(cards.match(tokenPattern) ?? []).map((tag) => new DeckItem(tag)),
+			);
 		}
-		return cards;
+		return DeckItems.fromArray(cards);
 	}
 }
 
 export function isWild(card: DeckItem) {
 	return card.value == '2' || card.value == '*';
+}
+
+export function aceMayBeHigh(cards: DeckItems) {
+	const thereIsK = cards.some(c=>c.value=='K');
+	if (thereIsK) return true;
+	
+	const thereIsQ = cards.find(c=>c.value=='Q');
+	if (!thereIsQ) return false;
+
+	const wilds = cards.filter(c=>isWild(c));
+	if (!wilds.length) return false;
+
+	//if (wilds.length > 1) return false;
+
+
+	const sameSuit = cards.every(c=>(c.suit === thereIsQ.suit));
+	const allValues = [2,3,4,5,6,7,8,9,'J','Q'].every(v=>cards.find(c=>c.value==v));
+	const mayBeCleanCanasta = sameSuit && allValues;
+	
+	 
+	return !mayBeCleanCanasta;
 }

@@ -1,0 +1,81 @@
+RIFERIMENTO REGOLE UFFICIALI ITALIANE BURRACO (SINTESI ONLINE)
+Fonte primaria: F.I.Bur. - Codice di Gara Edizione Gennaio 2026
+URL PDF: https://www.burraconetwork.com/file/fibur/upload_notizie/QUMxb2p7NzNGPVQ4WlRBPFF1YWAI.pdf
+News ufficiale: https://www.fibur.it/News.aspx?Codice=9%7BbXf%2CE%5Em%3F%60%2AuXU%3F%28%7B%2B3
+Data verifica fonti: 2026-02-19
+
+AMBITO
+- Regole F.I.Bur. per Burraco italiano (non variante internazionale).
+- Testo orientato a validazioni/algoritmi online: escluse procedure fisiche/arbitrali di tavolo.
+
+1) STRUTTURA BASE DELLA MANO
+Rif.: Art. 1, 2, 4.
+- 4 giocatori in 2 coppie.
+- 2 mazzi da 54 carte (108 totali, 4 jolly).
+- Ogni giocatore riceve 11 carte.
+- Si preparano 2 pozzetti da 11 carte.
+- Le carte residue formano il tallone; una carta scoperta avvia il monte scarti.
+
+2) OBIETTIVO
+Rif.: Art. 13, 17, 18.
+- Smazzata: fare piu punti degli avversari con giochi validi, burraco e chiusura.
+- Turno/partita: trasformare la differenza punti (Match Points) in VP con le tabelle ufficiali.
+
+3) FLUSSO DEL TURNO
+Rif.: Art. 7, 9.
+1. Pescare dal tallone oppure raccogliere dal monte scarti.
+2. Calare nuovi giochi e/o appoggiare carte su giochi esistenti.
+3. Scartare una carta.
+- Dopo lo scarto il turno termina.
+- Se si raccoglie dal monte scarti, la raccolta sostituisce la pesca.
+- Se il monte scarti ha una sola carta, quella carta non puo essere riscartata subito, salvo avere in mano una carta uguale.
+
+4) REGOLE DI CALATA/APPOGGIO (VALIDAZIONE GIOCHI)
+Rif.: Definizioni "Gioco"/"Legare", Art. 10, 11, 12.
+- Calare: aprire un gioco valido con almeno 3 carte.
+- Appoggiare (legare): aggiungere carte a giochi della propria linea mantenendo sempre la validita.
+- Sequenza: stesso seme, ordine progressivo, fino a 13 carte + eventuale 1 matta.
+- Combinazione: stesso valore, da 3 a 8 carte + eventuale 1 matta.
+- Matta: jolly o pinella; massimo 1 matta per gioco; una pinella usata come 2 naturale consente un'ulteriore matta.
+- Matta libera in sequenza: posizione piu bassa; se c'e gia Asso basso, posizione piu alta.
+- Jolly/pinella sostituiti restano nello stesso gioco (non tornano in mano).
+- Vietate combinazioni composte solo da matte.
+
+5) TIPOLOGIE DI BURRACO
+Rif.: Art. 13.
+- Burraco = sequenza o combinazione di almeno 7 carte.
+- Pulito: senza matte usate come matte (pinella usata come 2 naturale in sequenza resta pulito).
+- Semipulito:
+  sequenza con 1 matta che precede o segue almeno 7 carte naturali;
+  combinazione da 8 carte con 1 matta.
+- Sporco: ogni burraco con matta che non rientra nei casi di pulito/semipulito.
+
+6) CHIUSURA DELLA MANO
+Rif.: Art. 14, 17, 34, 35.
+- Chiusura valida con +100: coppia andata a pozzetto, almeno un burraco, scarto finale.
+- Chiusura senza +100 solo in casi speciali: fine tallone o timeout senza chiusura.
+- Chiusura con scarto di matta non ammessa.
+- Chiusura senza scarto non ammessa.
+- Caso limite: se l'unico scarto disponibile e una matta, la chiusura non e valida; l'ultimo gioco viene annullato e la matta resta scarto.
+
+7) PUNTEGGIO
+Rif.: Art. 1, 13, 18.
+Valori carte:
+- Jolly 30, Pinella 20, Asso 15, K/Q/J/10 10, 9-3 5.
+Punti positivi:
+- Burraco pulito +200, semipulito +150, sporco +100, chiusura +100.
+- Piu somma delle carte nei giochi a terra.
+Punti negativi:
+- Pozzo non preso -100 (non si applica se nessuna coppia prende il pozzo).
+- Pozzo preso e non giocato: -somma carte del pozzo.
+- Carte rimaste in mano: -somma valori.
+
+8) CONDIZIONI DI VITTORIA
+Rif.: Art. 18, 20.
+- Vittoria di smazzata: punteggio totale superiore.
+- Vittoria di turno: conversione Match Points -> VP con tabella ufficiale (0 punti = 10-10 VP).
+- Vittoria di torneo: classifica finale per VP.
+
+NOTE IMPLEMENTATIVE
+- Documento di riferimento per: setup mano, validazioni turni/giocate, chiusura, scoring.
+- Procedure disciplinari/arbitrali non incluse in questa sintesi online.

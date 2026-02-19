@@ -1,7 +1,15 @@
 import { Component, computed, input, linkedSignal, output, signal } from '@angular/core';
 
 import { CommonModule } from '@angular/common';
-import { CardValue, parseCardSuit, parseCardValue, Suit } from '../../services/cards';
+import {
+	cardToString,
+	CardColor,
+	CardValue,
+	parseCardColor,
+	parseCardSuit,
+	parseCardValue,
+	Suit,
+} from '../../services/cards';
 import { Rules } from '../../services/rules';
 import { Card } from '../card/card';
 
@@ -12,18 +20,34 @@ export class DeckItem {
 	public faceDown: boolean;
 	public value: CardValue;
 	public suit: Suit;
+	public color?: CardColor;
 
 	constructor(card: string, faceDown: boolean = false) {
 		this.uid = DeckItem.uid++;
-		this.tag = card;
-		this.value = parseCardValue(card.match(/[\w*]+/)[0]);
-		this.suit = parseCardSuit(card.match(/\W+/)[0]);
+		this.value = parseCardValue(card);
+		this.suit = parseCardSuit(card);
+		this.color = parseCardColor(this.suit || card);
 		this.faceDown = faceDown;
+		this.tag = this.toString();
 	}
 
 	toString() {
-		return this.tag;
+		return cardToString(this.value, this.suit, this.color);
 	}
+}
+
+export class DeckItems extends Array<DeckItem> {
+	static fromArray(items: DeckItem[] = []): DeckItems {
+		return DeckItems.from(items);
+	}
+
+	override toString(): string {
+		return Array.from(this, (item) => item.toString()).reverse().join(' ');
+	}
+}
+
+export function deckToString(deck: DeckItems): string {
+	return deck.toString();
 }
 
 @Component({

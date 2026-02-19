@@ -19,7 +19,6 @@ describe('Rules', () => {
 		expect(result).not.toBeNull();
 	});
 
-	
 	it('accepts simple set of 3 cards', () => {
 		const result = service.validateSet('7♥️ 7♥️ 7♠️');
 		expect(result).not.toBeNull();

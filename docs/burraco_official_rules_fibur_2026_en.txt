@@ -1,0 +1,81 @@
+OFFICIAL ITALIAN BURRACO RULES REFERENCE (ONLINE SUMMARY)
+Primary source: F.I.Bur. - Code of Play January 2026 Edition
+PDF URL: https://www.burraconetwork.com/file/fibur/upload_notizie/QUMxb2p7NzNGPVQ4WlRBPFF1YWAI.pdf
+Official news: https://www.fibur.it/News.aspx?Codice=9%7BbXf%2CE%5Em%3F%60%2AuXU%3F%28%7B%2B3
+Source verification date: 2026-02-19
+
+SCOPE
+- F.I.Bur. rules for Italian Burraco (not the international variant).
+- Text oriented to online validations/algorithms: physical table and referee workflows are excluded.
+
+1) HAND BASE STRUCTURE
+Ref.: Art. 1, 2, 4.
+- 4 players in 2 partnerships.
+- 2 decks of 54 cards (108 total, 4 jokers).
+- Each player receives 11 cards.
+- Two reserve piles (pozzetti) of 11 cards are prepared.
+- Remaining cards form the draw pile; one face-up card starts the discard pile.
+
+2) OBJECTIVE
+Ref.: Art. 13, 17, 18.
+- Hand: score more points than opponents with valid melds, burraco, and valid closing.
+- Round/match: convert point difference (Match Points) into VP via official tables.
+
+3) TURN FLOW
+Ref.: Art. 7, 9.
+1. Draw from draw pile or collect from discard pile.
+2. Open new melds and/or lay off cards on existing melds.
+3. Discard one card.
+- Turn ends after discard.
+- If the player collects from discard pile, that replaces drawing.
+- If discard pile has only one card, that card cannot be discarded immediately unless the player has another identical card in hand.
+
+4) OPENING/LAYING RULES (MELD VALIDATION)
+Ref.: Definitions "Gioco"/"Legare", Art. 10, 11, 12.
+- Open: create a valid meld with at least 3 cards.
+- Lay off: add cards to your partnership line while keeping the meld always valid.
+- Run: same suit, consecutive order, up to 13 cards + possible 1 wild.
+- Set: same rank, from 3 to 8 cards + possible 1 wild.
+- Wild: joker or pinella; maximum 1 wild per meld; exception: same-suit pinella used as natural 2 allows one additional wild in runs.
+- Free wild in runs: lowest position; if an Ace is already low, highest position.
+- Replaced joker/pinella stays in the same meld (does not return to hand).
+- Sets made only of wild cards are not allowed.
+
+5) BURRACO TYPES
+Ref.: Art. 13.
+- Burraco = run or set of at least 7 cards.
+- Clean: no wilds used as wilds (pinella as natural 2 in runs still counts as clean).
+- Semi-clean:
+  run with 1 wild before or after at least 7 natural cards;
+  set of 8 cards with 1 wild.
+- Dirty: any burraco with wild usage outside clean/semi-clean cases.
+
+6) HAND CLOSING
+Ref.: Art. 14, 17, 34, 35.
+- Valid close with +100: partnership has taken pozzetto, made at least one burraco, and closes by discarding.
+- Close without +100 only in special cases: draw-pile exhaustion or timeout without a close.
+- Closing by discarding a wild is not allowed.
+- Closing without a discard is not allowed.
+- Edge case: if the only available discard is a wild, close is invalid; last meld played is canceled and the wild remains as discard.
+
+7) SCORING
+Ref.: Art. 1, 13, 18.
+Card values:
+- Joker 30, Pinella 20, Ace 15, K/Q/J/10 10, 9-3 5.
+Positive points:
+- Clean burraco +200, semi-clean +150, dirty +100, closing +100.
+- Plus the sum of cards in melds on table.
+Negative points:
+- Pozzetto not taken -100 (not applied if neither partnership takes pozzetto).
+- Pozzetto taken but not played: negative sum of pozzetto cards.
+- Cards left in hand: negative sum of card values.
+
+8) WIN CONDITIONS
+Ref.: Art. 18, 20.
+- Hand win: higher total score.
+- Round win: Match Points -> VP conversion via official table (0 points = 10-10 VP).
+- Tournament win: final ranking by VP.
+
+IMPLEMENTATION NOTES
+- Reference document for: hand setup, turn/play validations, closing checks, scoring.
+- Disciplinary/referee procedures are not included in this online summary.
