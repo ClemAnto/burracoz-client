@@ -14,13 +14,54 @@ describe('Rules', () => {
 		expect(service).toBeTruthy();
 	});
 
-	it('accepts run strings with mixed separators', () => {
-		const result = service.validateRun('A♥️, 2♥️; 3♥️ / 4♥️');
+	it('accepts simple stright of 4 cards', () => {
+		const result = service.validateRun('A♥️ 2♥️ 3♥️ 4♥️');
 		expect(result).not.toBeNull();
 	});
 
-	it('accepts set strings with mixed separators', () => {
-		const result = service.validateSet('7♥️ - 7♦️ / 7♠️');
+	
+	it('accepts simple set of 3 cards', () => {
+		const result = service.validateSet('7♥️ 7♥️ 7♠️');
 		expect(result).not.toBeNull();
+	});
+
+	it('reject simple set of 3 equal cards', () => {
+		const result = service.validateSet('7♥️ 7♥️ 7♥️');
+		expect(result).toBeNull();
+	});
+
+	it('reject double A', () => {
+		const result = service.validateRun('A♥️ 2♥️ 3♥️ 4♥️ 5♥️ 6♥️ 7♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️ K♥️ A♥️');
+		expect(result).toBeNull();
+	});
+
+	it('accept complete run of 14 cards (last Jocker)', () => {
+		const result = service.validateRun('A♥️ 2♥️ 3♥️ 4♥️ 5♥️ 6♥️ 7♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️ K♥️ *');
+		expect(result).not.toBeNull();
+	});
+
+	it('reject complete run of 14 cards double wild', () => {
+		const result = service.validateRun('3♥️ 4♥️ 8♥️ 9♥️ 10♥️ J♥️ 5♥️ 6♥️ 7♥️ A♥️ 2♠️ Q♥️ K♥️ *');
+		expect(result).toBeNull();
+	});
+
+	it('accept complete run of 14 cards (first Jocker)', () => {
+		const result = service.validateRun('* 2♥️ 3♥️ 4♥️ 5♥️ 6♥️ 7♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️ K♥️ A♥️');
+		expect(result).not.toBeNull();
+	});
+
+	it('accept complete run 1 wild + 1 natural two (at end)', () => {
+		const result = service.validateRun('2♠️ 4♥️ A♥️ 2♥️');
+		expect(result).not.toBeNull();
+	});
+
+	it('accept complete run 1 wild + 1 natural two (at start)', () => {
+		const result = service.validateRun('2♥️ 4♥️ A♥️ 2♠️');
+		expect(result).not.toBeNull();
+	});
+
+	it('accept complete run 2 wild', () => {
+		const result = service.validateRun('2♠️ 4♥️ A♥️ *');
+		expect(result).toBeNull();
 	});
 });

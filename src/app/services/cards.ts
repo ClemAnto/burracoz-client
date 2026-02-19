@@ -75,3 +75,7 @@ export function getCardRank(cardValue: CardValue): number {
 	const figures: any = { A: 1, J: 11, Q: 12, K: 13 };
 	return figures[cardValue] || +cardValue;
 }
+
+export function howMany(card:DeckItem, deck:DeckItem[]) {
+	return deck.filter(d=>d.tag == card.tag).length;
+}

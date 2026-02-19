@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { DeckItem } from '../ui/deck/deck';
-import { getCardRank } from './cards';
+import { getCardRank, howMany } from './cards';
 
 type MeldInput = DeckItem[] | string;
 
@@ -31,6 +31,9 @@ export class Rules {
 		const value = naturals[0].value;
 		if (naturals.some((c) => c.value != value)) return null;
 
+		//TOO MANY EQUAL CARDS!
+		if (naturals.some((c) => howMany(c, naturals) > 2)) return null;
+
 		console.log('[RULES] Set validated: ' + cards);
 		return cards;
 	}
@@ -38,6 +41,14 @@ export class Rules {
 	validateRun(layOffCards: MeldInput, tableCards?: MeldInput) {
 		//CartType
 		console.log('[RULES] Validate Run...');
+
+		
+		//1) Se nelle tableCards c'è un jolly e nelle layOffCards c'è la carta che lo può liberare,
+		//	 questa prende il suo posto ed il jolly va nelle layOffCards
+		//2) Un 2 naturale, se non ci sono altri jollu in tableCards, è mobile e va nelle layOffCards
+		//3) I jolly liberi occupano sempre la posizione più bassa a meno che non sia presente già un A
+		//	 ed in quel caso il jolly andrà nella posizione più alta
+		
 		const cards = this.toDeckItems(layOffCards).concat(this.toDeckItems(tableCards));
 
 		const naturals = cards
