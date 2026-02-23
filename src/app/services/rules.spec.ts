@@ -63,4 +63,31 @@ describe('Rules', () => {
 		const result = service.validateRun('2♠️ 4♥️ A♥️ *');
 		expect(result).toBeNull();
 	});
+
+	it('detects incastro wild replacement tag', () => {
+		const result = service.getIncastroWildReplacementTag('5♥️ * 7♥️');
+		expect(result).toBe('6♥️');
+	});
+
+	it('returns null when wild is not in the middle', () => {
+		const result = service.getIncastroWildReplacementTag('5♥️ 6♥️ *');
+		expect(result).toBeNull();
+	});
+
+	it('detects incastro with ace high run', () => {
+		const result = service.getIncastroWildReplacementTag('Q♥️ * A♥️');
+		expect(result).toBe('K♥️');
+	});
+
+	it('releases table wild when layoff has the matching natural card', () => {
+		const result = service.validateRun('6♥️', '5♥️ * 7♥️');
+		expect(result).not.toBeNull();
+		expect(result!.map((c) => c.toString())).toEqual(['7♥️', '6♥️', '5♥️', '*']);
+	});
+
+	it('moves natural two from table to layoff when no other wild is on table', () => {
+		const result = service.validateRun('6♥️', '2♥️ 3♥️ 4♥️');
+		expect(result).not.toBeNull();
+		expect(result!.map((c) => c.toString())).toEqual(['6♥️', '2♥️', '4♥️', '3♥️']);
+	});
 });

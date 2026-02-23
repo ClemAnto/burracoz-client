@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { DeckItem, DeckItems } from '../ui/deck/deck';
-import { getCardRank, howMany } from './cards';
+import { getCardRank, howMany, STARTER_DECK } from './cards';
 
 type MeldInput = DeckItems | DeckItem[] | string;
 
@@ -39,20 +39,40 @@ export class Rules {
 	}
 
 	validateRun(layOffCards: MeldInput, tableCards?: MeldInput): DeckItems | null {
-		//CardType
-		//console.log('[RULES] Validate Run...');
+		
+		const layedOff = this.toDeckItems(layOffCards);
+		const onTable = this.toDeckItems(tableCards);
 
-		//1) Se nelle tableCards c'è un jolly e nelle layOffCards c'è la carta che lo può liberare,
-		//	 questa prende il suo posto ed il jolly va nelle layOffCards
-		//2) Un 2 naturale, se non ci sono altri jollu in tableCards, è mobile e va nelle layOffCards
-		//3) I jolly liberi occupano sempre la posizione più bassa a meno che non sia presente già un A
-		//	 ed in quel caso il jolly andrà nella posizione più alta
+		if (onTable?.length) {
+			const tableSuit = onTable.find(c=>!isWild(c)).suit;
+			if (layedOff.some(c=>(!isWild(c) && c.suit!=tableSuit))) {
+				return null;
+			}
 
-		const cards = DeckItems.fromArray(
-			this.toDeckItems(layOffCards).concat(this.toDeckItems(tableCards)),
-		);
+			//Scambio il jolly ad incastro dal tavolo se presente nelle carte calate
+			const {tag,index} = getWildNaturalTag(onTable);
+			if (tag) {
+				const layedOffIndex = layedOff.findIndex(card=>card.tag == tag);
+				const [card] = layedOff.splice(layedOffIndex, 1);
+				const [wild] = onTable.splice(index, 1, card);
+				layedOff.push(wild);
 
-		const aceHigh = aceMayBeHigh(cards);
+			} else {
+
+				//Rimuovo i jolly mobili (quelli alle estremità) 
+				if (isWild(onTable[0])) {
+					const [bottomWild] = onTable.splice(0, 1);
+					layedOff.push(bottomWild);
+				}
+				if (isWild(onTable[onTable.length-1])) {
+					const [topWild] = onTable.splice(onTable.length-1, 1);
+					layedOff.push(topWild);
+				}
+			}
+		}
+
+		const cards = layedOff;
+		const aceHigh = aceMayBeHigh(layedOff.concat(onTable));
 		
 		const naturals = cards
 			.filter((c) => !isWild(c))
@@ -68,23 +88,44 @@ export class Rules {
 		const wildVal = (card: DeckItem) => (card.value == '2' && card.suit == suit ? 1 : 0);
 		const wilds = cards.filter(isWild).sort((a, b) => wildVal(a) - wildVal(b));
 
-		const run = DeckItems.fromArray([naturals.shift()]);
+		//Set first natural card
+		const minOnTableValue = getCardRank(onTable[0]?.value, aceHigh);
+		const run:DeckItems = DeckItems.fromArray([]);
+		
+		if (!minOnTableValue || getCardRank(naturals[0].value, aceHigh) < minOnTableValue) {
 
-		const suit2index = wilds.findIndex((w) => w.value == '2' && w.suit == suit);
-		if (run[0].value == 'A') {
-			if (suit2index >= 0) {
-				const [suit2] = wilds.splice(suit2index, 1);
-				run.unshift(suit2);
+			run.push(naturals.shift());
+			
+			//Set natural 2
+			const suit2index = wilds.findIndex((w) => w.value == '2' && w.suit == suit);
+			if (run[0].value == 'A') {
+				if (suit2index >= 0) {
+					const [suit2] = wilds.splice(suit2index, 1);
+					run.unshift(suit2);
+				}
 			}
+
+			if (run[0].value == '4' && wilds.length == 2 && suit2index >= 0) {
+				run.push(...wilds.splice(0, 2));
+			}
+
+		} else {
+
+			//Start from onTable
+			run.push(...onTable.splice(0, onTable.length).reverse());
+			
 		}
 
-		if (run[0].value == '4' && wilds.length == 2 && suit2index >= 0) {
-			run.push(...wilds.splice(0, 2));
-		}
-
+		//Count used wilds (excluded 2 in natural position)
+		//var usedWilds = run.filter((c,i)=>isWild(c) && ( c.suit != suit || +c.value != i+1)).length;
 		var usedWilds = 0;
 
 		do {
+
+			if (minOnTableValue && naturals[0] && getCardRank(naturals[0].value, aceHigh) > minOnTableValue ) {
+				run.unshift(...onTable.splice(0, onTable.length).reverse());
+			}
+
 			const nextCard = naturals.shift();
 			if (!nextCard) break;
 
@@ -105,6 +146,21 @@ export class Rules {
 			}
 			run.unshift(nextCard);
 		} while (naturals.length);
+
+		if (onTable.length) {
+
+			//VALUTARE SE PER ATTACCARE LE CARTE CALATE A QUELLE SUL TAVOLO SERVE UN JOLLY
+			//if (run[0]) {
+			//	const gap = getCardRank(run[0].value, aceHigh) - minOnTableValue;
+				//if ( getCardRank(run[0].value, aceHigh) - minOnTableValue ) {
+
+				//}	
+			//} 
+			//	return null
+			//}
+			run.unshift(...onTable.reverse());
+		}
+		
 
 		if (run[run.length - 1].value == '3') {
 			const suit2index = wilds.findIndex((w) => w.value == '2' && w.suit == suit);
@@ -133,6 +189,32 @@ export class Rules {
 		return run;
 	}
 
+	willAttach(layOffCards: MeldInput, tableCards?: MeldInput) {
+		const layedOff = this.toDeckItems(layOffCards);
+		const onTable = this.toDeckItems(tableCards);
+
+		const {tag,index} = getWildNaturalTag(onTable);
+		if (tag) {
+			const layedOffIndex = layedOff.findIndex(card=>card.tag == tag);
+			const [card] = layedOff.splice(layedOffIndex, 1);
+			const [wild] = onTable.splice(index, 1, card);
+			layedOff.push(wild);
+		}
+
+		//CardType
+		//console.log('[RULES] Validate Run...');
+
+		//1) Se nelle tableCards c'è un jolly e nelle layOffCards c'è la carta che lo può liberare,
+		//	 questa prende il suo posto ed il jolly va nelle layOffCards
+		//2) Un 2 naturale, se non ci sono altri jollu in tableCards, è mobile e va nelle layOffCards
+		//3) I jolly liberi occupano sempre la posizione più bassa a meno che non sia presente già un A
+		//	 ed in quel caso il jolly andrà nella posizione più alta
+
+		
+		
+
+	}
+
 	private toDeckItems(cards?: MeldInput): DeckItems {
 		if (!cards) return new DeckItems();
 		if (cards instanceof DeckItems) return cards;
@@ -148,7 +230,7 @@ export class Rules {
 }
 
 export function isWild(card: DeckItem) {
-	return card.value == '2' || card.value == '*';
+	return card && (card.value == '2' || card.value == '*');
 }
 
 export function aceMayBeHigh(cards: DeckItems) {
@@ -170,4 +252,19 @@ export function aceMayBeHigh(cards: DeckItems) {
 	
 	 
 	return !mayBeCleanCanasta;
+}
+
+
+export function getWildNaturalTag(cards: DeckItems):{tag:string, index:number} {
+	
+	const wildIndex = cards.findIndex((c,i)=>i>0 && isWild(c) && cards[i-1].value != 'A');
+	if (wildIndex < 1 || wildIndex > cards.length-2) return {tag:null, index:-1};
+
+	const prevCard = cards[wildIndex-1];
+	const starterDeckIndex = STARTER_DECK.findIndex(tag=>tag==prevCard.tag);
+
+	return {
+		tag: STARTER_DECK[starterDeckIndex+1],
+		index: wildIndex
+	}
 }

@@ -11,6 +11,71 @@ type TestCase = {
 };
 
 const TEST: TestCase[] = [
+
+	
+
+	{
+		type: 'validateRun',
+		inputs: ['2♠️', '* 4♠️ 5♠️'],
+		outputs: '2♠️ * 4♠️ 5♠️',
+	},
+
+	{
+		type: 'validateRun',
+		inputs: ['5♠️', '* 7♠️ 8♠️'],
+		outputs: '5♠️ * 7♠️ 8♠️',
+	},
+
+	{
+		type: 'validateRun',
+		inputs: ['7♠️', '* 4♠️ 5♠️'],
+		outputs: '4♠️ 5♠️ * 7♠️',
+	},
+	
+	{
+		type: 'validateRun',
+		inputs: ['3♠️ 7♠️ 2♠️', '* 4♠️ 5♠️'],
+		outputs: '2♠️ 3♠️ 4♠️ 5♠️ * 7♠️',
+	},
+
+	{
+		type: 'validateRun',
+		inputs: ['3♠️ 7♠️ 2♥️', '* 4♠️ 5♠️'],
+		outputs: null,
+	},
+
+	{
+		type: 'validateRun',
+		inputs: ['3♠️ 6♠️', 'A♠️ 2♠️ 2♠️ 4♠️'],
+		outputs: 'A♠️ 2♠️ 3♠️ 4♠️ 2♠️ 6♠️',
+	},
+	
+	{
+		type: 'validateRun',
+		inputs: ['3♠️ 6♥️', 'A♠️ 2♠️ 2♠️ 4♠️'],
+		outputs: null,
+	},
+
+	{
+		type: 'validateRun',
+		inputs: ['* 6♥️', 'A♥️ 2♥️ 2♥️ 4♥️'],
+		outputs: null,
+	},
+
+	{
+		type: 'validateRun',
+		inputs: ['* 6♥️', 'A♥️ 2♥️ 3♥️ 4♥️'],
+		outputs: 'A♥️ 2♥️ 3♥️ 4♥️ * 6♥️',
+	},
+
+	{
+		type: 'validateRun',
+		inputs: ['3♥️ 7♥️', 'A♥️ 2♥️ * 4♥️'],
+		outputs: null,
+	},
+];
+
+const TEST_2: TestCase[] = [
 	{
 		type: 'validateRun',
 		inputs: ['A♥️ 2♥️ 3♥️ 4♥️'],
@@ -107,6 +172,7 @@ export class Tests {
 
 	run() {
 		console.groupCollapsed("[TESTS] VALIDATIONS");
+		
 		TEST.forEach((test) => {
 			const fn = this.rules[test.type] as (...args: unknown[]) => unknown;
 			const result = fn.call(this.rules, ...test.inputs);
