@@ -34,7 +34,7 @@ Rif.: Art. 7, 9.
 Rif.: Definizioni "Gioco"/"Legare", Art. 10, 11, 12.
 - Calare: aprire un gioco valido con almeno 3 carte.
 - Appoggiare (legare): aggiungere carte a giochi della propria linea mantenendo sempre la validita.
-- Sequenza: stesso seme, ordine progressivo, fino a 13 carte + eventuale 1 matta.
+- Sequenza: stesso seme, ordine progressivo, fino a 13 carte + eventuale 1 matta, l'asso può andare prima del 2 o dopo il K.
 - Combinazione: stesso valore, da 3 a 8 carte + eventuale 1 matta.
 - Matta: jolly o pinella; massimo 1 matta per gioco; una pinella usata come 2 naturale consente un'ulteriore matta.
 - Matta libera in sequenza: posizione piu bassa; se c'e gia Asso basso, posizione piu alta.

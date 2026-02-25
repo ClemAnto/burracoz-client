@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /d/Projects/Burracoz/burracoz-client log --oneline -20)",
+      "Bash(yarn test:rules --no-sandbox)",
+      "Bash(yarn test:rules)"
+    ]
+  }
+}

@@ -114,7 +114,7 @@ export function cardToString(
 
 export function getCardRank(cardValue: CardValue, aceHigh = false): number {
 	const figures: any = { A: aceHigh ? 14 : 1, J: 11, Q: 12, K: 13 };
-	return figures[cardValue] || +cardValue;
+	return figures[cardValue] || +cardValue || 0;
 }
 
 export function howMany(card: DeckItem, deck: DeckItem[]) {
