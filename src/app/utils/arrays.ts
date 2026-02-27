@@ -11,6 +11,10 @@ export function extractFrom<T>(array:T[], condition:(item:T)=>boolean, extracted
 	return extracted;
 }
 
+export function first<T>(array:T[]):T {
+	return (array || []).slice(0)[0];
+}
+
 export function last<T>(array:T[]):T {
 	return (array || []).slice(-1)[0];
 }
