@@ -24,6 +24,31 @@ describe('Rules', () => {
 		expect(result).not.toBeNull();
 	});
 
+	it('rejects set opening with less than 3 cards', () => {
+		const result = service.validateSet('7♥️ 7♠️');
+		expect(result).toBeNull();
+	});
+
+	it('rejects layoff with no cards from hand', () => {
+		const result = service.validateSet('', '7♥️ 7♠️ 7♦️');
+		expect(result).toBeNull();
+	});
+
+	it('accepts set of 8 naturals plus 1 wild', () => {
+		const result = service.validateSet('7♥️ 7♥️ 7♠️ 7♠️ 7♦️ 7♦️ 7♣️ 7♣️ *');
+		expect(result).not.toBeNull();
+	});
+
+	it('rejects set longer than allowed size', () => {
+		const result = service.validateSet('7♥️ 7♥️ 7♠️ 7♠️ 7♦️ 7♦️ 7♣️ 7♣️ * 7♥️');
+		expect(result).toBeNull();
+	});
+
+	it('rejects set with different natural ranks', () => {
+		const result = service.validateSet('7♥️ 7♠️ 8♦️');
+		expect(result).toBeNull();
+	});
+
 	it('reject simple set of 3 equal cards', () => {
 		const result = service.validateSet('7♥️ 7♥️ 7♥️');
 		expect(result).toBeNull();

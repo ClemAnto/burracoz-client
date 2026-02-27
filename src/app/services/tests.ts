@@ -11,14 +11,12 @@ type TestCase = {
 };
 
 const TEST: TestCase[] = [
-
 	{
 		type: 'validateRun',
 		inputs: ['7♥️ A♥️ 2♥️ 3♥️ * 5♥️ 6♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️'],
 		outputs: 'A♥️ 2♥️ 3♥️ * 5♥️ 6♥️ 7♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️',
 	},
 
-	
 	{
 		type: 'validateRun',
 		inputs: ['7♥️ A♥️ 2♥️ 3♥️ 4♥️ 5♥️ 6♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️'],
@@ -30,7 +28,7 @@ const TEST: TestCase[] = [
 		inputs: ['2♥️ 3♥️ 4♥️ 5♥️ 6♥️ A♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️ K♥️ 7♥️'],
 		outputs: '2♥️ 3♥️ 4♥️ 5♥️ 6♥️ 7♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️ K♥️ A♥️',
 	},
-	
+
 	{
 		type: 'validateRun',
 		inputs: ['7♥️ A♥️ 2♥️ 3♥️ 4♥️ * 5♥️ 6♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️ 4♥️'],
@@ -41,7 +39,7 @@ const TEST: TestCase[] = [
 		inputs: ['A♥️ 2♥️ 3♥️ 4♥️ 5♥️ 6♥️ 7♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️ K♥️ A♥️'],
 		outputs: null,
 	},
-	
+
 	{
 		type: 'validateRun',
 		inputs: ['2♠️', '2♥️ 3♥️ 4♥️ *'],
@@ -89,9 +87,6 @@ const TEST: TestCase[] = [
 		outputs: '2♥️ 3♥️ 4♥️ 5♥️ * 7♥️',
 	},
 
-	
-
-	
 	{
 		type: 'validateRun',
 		inputs: ['2♠️', '5♥️ * 7♥️'],
@@ -232,14 +227,13 @@ const TEST: TestCase[] = [
 		inputs: ['A♥️ 5♥️', '2♥️ 2♥️ 3♥️ 4♥️'],
 		outputs: 'A♥️ 2♥️ 3♥️ 4♥️ 5♥️ 2♥️',
 	},
-	
-	
+
 	{
 		type: 'validateRun',
 		inputs: ['A♥️ 2♥️ 3♥️ 4♥️', '5♥️ 2♠️ 7♥️'],
 		outputs: 'A♥️ 2♥️ 3♥️ 4♥️ 5♥️ 2♠️ 7♥️',
 	},
-	
+
 	{
 		type: 'validateRun',
 		inputs: ['2♠️', 'A♥️ 2♥️ 3♥️'],
@@ -255,6 +249,26 @@ const TEST: TestCase[] = [
 		type: 'validateRun',
 		inputs: ['J♥️', 'Q♥️ 2♥️ A♥️'],
 		outputs: 'J♥️ Q♥️ 2♥️ A♥️',
+	},
+	{
+		type: 'validateRun',
+		inputs: ['10♥️', 'J♥️ Q♥️ 2♥️ A♥️'],
+		outputs: '10♥️ J♥️ Q♥️ 2♥️ A♥️',
+	},
+	{
+		type: 'validateRun',
+		inputs: ['9♥️', 'J♥️ Q♥️ 2♥️ A♥️'],
+		outputs: null,
+	},
+	{
+		type: 'validateRun',
+		inputs: ['J♥️', 'Q♥️ * A♥️'],
+		outputs: 'J♥️ Q♥️ * A♥️',
+	},
+	{
+		type: 'validateRun',
+		inputs: ['10♥️', 'Q♥️ * A♥️'],
+		outputs: null,
 	},
 	{
 		type: 'validateRun',
@@ -339,7 +353,6 @@ const TEST: TestCase[] = [
 		outputs: '2♠️ * 4♠️ 5♠️',
 	},
 
-	
 	{
 		type: 'validateRun',
 		inputs: ['3♠️ 6♥️', 'A♠️ 2♠️ 2♠️ 4♠️'],
@@ -414,13 +427,12 @@ const TEST: TestCase[] = [
 		outputs: null,
 	},
 
-	
 	{
 		type: 'validateRun',
 		inputs: ['7♥️ A♥️ 2♥️ 3♥️ 4♥️ * 5♥️ 6♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️'],
 		outputs: '2♥️ 3♥️ 4♥️ 5♥️ 6♥️ 7♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️ * A♥️',
 	},
-	
+
 	{
 		type: 'validateSet',
 		inputs: ['7♥️ 7♥️ 7♠️'],
@@ -431,8 +443,7 @@ const TEST: TestCase[] = [
 		inputs: ['7♥️ 7♥️ 7♥️'],
 		outputs: null,
 	},
-	
-	
+
 	{
 		type: 'validateRun',
 		inputs: ['7♥️ A♥️ 2♠️ 3♥️ 4♥️ 5♥️ 6♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️'],

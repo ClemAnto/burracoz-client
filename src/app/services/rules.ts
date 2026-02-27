@@ -16,19 +16,32 @@ export class Rules {
 	}
 
 	validateSet(layOffCards: MeldInput, tableCards?: MeldInput): DeckItems | null {
-		const cards = DeckItems.fromArray(
-			this.toDeckItems(layOffCards).concat(this.toDeckItems(tableCards)),
-		).sort((a, b) => +isWild(a) - +isWild(b));
+		const layedOff = this.toDeckItems(layOffCards);
+		if (!layedOff.length) {
+			//E' necessario giocare almeno una carta dalla mano
+			return null;
+		}
 
-		//NOT ENOUGH CARDS?
-		if (cards.length < 3) return null;
+		const onTable = this.toDeckItems(tableCards);
+		const cards = DeckItems.fromArray(layedOff.concat(onTable)).sort(
+			(a, b) => +isWild(a) - +isWild(b),
+		);
+
+		if (!onTable.length && layedOff.length < 3) {
+			//Non è possibile creare un gioco con meno di 3 carte
+			return null;
+		}
 
 		//TOO MANY WILDS?
 		const wilds = cards.filter(isWild);
 		if (wilds.length > 1) return null;
 
+		//SET SIZE LIMIT: 3..8 naturals (+ optional 1 wild)
+		if (cards.length < 3 || cards.length > 9) return null;
+
 		//SAME VALUE?
 		const naturals = cards.filter((c) => !isWild(c));
+		if (!naturals.length || naturals.length > 8) return null;
 		const value = naturals[0].value;
 		if (naturals.some((c) => c.value != value)) return null;
 
@@ -128,9 +141,6 @@ export class Rules {
 					natural2 = null;
 				} 
 
-				if (wild) {
-					debugger
-				}
 				wild = natural2;
 				natural2 = null;
 			}
