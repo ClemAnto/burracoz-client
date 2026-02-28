@@ -1,9 +1,9 @@
 :host {
 	ui-card {
-		//--h: calc(var(--spacing, 0.25rem) * 10);
-		//--w: calc(var(--spacing, 0.25rem) * 8);
-		//height: calc(sin(var(--rotate, 0) * 3.14) + cos(var(--rotate, 0) * 3.14));
-		//width:  calc(cos(var(--rotate, 0) * 3.14) + sin(var(--rotate, 0) * 3.14));
+		// Rotazione Z della singola carta, guidata da --rotate del Deck padre.
+		// Compone con il rotateY del flip fronte/retro senza conflitti
+		// perché la proprietà CSS `rotate` è applicata dopo `transform`.
+		rotate: var(--rotate, 0deg);
 
 		::ng-deep {
 			> * {

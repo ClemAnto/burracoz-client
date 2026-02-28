@@ -5,11 +5,26 @@ import {
 	cardToString,
 	CardColor,
 	CardValue,
+	getCardRank,
 	parseCardColor,
 	parseCardSuit,
 	parseCardValue,
 	Suit,
 } from '../../services/cards';
+
+const SUIT_ORDER: Partial<Record<Suit, number>> = {
+	[Suit.Hearts]: 0,
+	[Suit.Diamonds]: 1,
+	[Suit.Clubs]: 2,
+	[Suit.Spades]: 3,
+};
+
+function sortBySuitThenRank(a: DeckItem, b: DeckItem): number {
+	const suitA = SUIT_ORDER[a.suit] ?? 4;
+	const suitB = SUIT_ORDER[b.suit] ?? 4;
+	if (suitA !== suitB) return suitA - suitB;
+	return getCardRank(a.value) - getCardRank(b.value);
+}
 import { Rules } from '../../services/rules';
 import { Card } from '../card/card';
 
@@ -65,14 +80,20 @@ export class Deck {
 	selectable = input<boolean>(false);
 	faceDown = input<boolean>(null);
 	rotate = input<number>(null);
+	/** Spaziatura tra le carte nel layout grid (unità Tailwind spacing, es. 2 = 0.5rem). */
+	gap = input<number>(null);
+	/** Se true, ordina automaticamente le carte per seme poi per rank. */
+	autosort = input<boolean>(false);
 
 	cards = input<string[] | DeckItem[]>();
 
 	list = linkedSignal<DeckItem[]>(() => {
-		return this.cards().map((c) => {
+		const items = this.cards().map((c) => {
 			if (typeof c == 'string') return new DeckItem(c, this.faceDown());
 			return c;
 		});
+		if (!this.autosort()) return items;
+		return [...items].sort(sortBySuitThenRank);
 	});
 
 	freezeds = signal<any>({});

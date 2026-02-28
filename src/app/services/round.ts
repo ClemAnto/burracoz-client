@@ -2,7 +2,7 @@ import { Injectable, computed, signal } from '@angular/core';
 import { Subject } from 'rxjs';
 import { DeckItem } from '../ui/deck/deck';
 import { parseCardValue, STARTER_DECK } from './cards';
-import { Rules } from './rules';
+import { isWild, Rules } from './rules';
 
 export type RoundPlayer = 'east' | 'west' | 'north' | 'sud';
 export type RoundTeam = 'opponents' | 'ours';
@@ -83,12 +83,41 @@ export type RoundTeamScore = {
 
 export type RoundScore = Record<RoundTeam, RoundTeamScore>;
 
-type TeamRoundState = {
+export type TeamRoundState = {
 	hasTakenPozzetto: boolean;
 	takenBy: RoundPlayer | null;
 	takenWithDiscard: boolean;
 	originalPozzetto: string[];
 	cardsPlayedAfterPozzetto: number;
+};
+
+export type RoundSavedState = {
+	phase: RoundPhase;
+	dealer: RoundPlayer | null;
+	currentPlayer: RoundPlayer | null;
+	turnStep: RoundTurnStep;
+	turnIndex: number;
+	hands: Record<RoundPlayer, string[]>;
+	drawPile: string[];
+	discardPile: string[];
+	pozzetti: string[][];
+	melds: Record<RoundTeam, string[][]>;
+	playerHasTakenPozzetto: Record<RoundPlayer, boolean>;
+	teamRoundState: Record<RoundTeam, TeamRoundState>;
+	winnerPlayer: RoundPlayer | null;
+	winnerTeam: RoundTeam | null;
+	score: RoundScore | null;
+};
+
+/** Snapshot dello stato all'inizio della fase play_and_discard, usato per il rollback. */
+type TurnSnapshot = {
+	player: RoundPlayer;
+	team: RoundTeam;
+	hand: string[];
+	teamMelds: string[][];
+	pozzetti: string[][];
+	playerHasTakenPozzetto: Record<RoundPlayer, boolean>;
+	teamRoundState: Record<RoundTeam, TeamRoundState>;
 };
 
 const PLAYER_ORDER: RoundPlayer[] = ['north', 'east', 'sud', 'west'];
@@ -130,6 +159,13 @@ export class Round {
 	score = signal<RoundScore | null>(null);
 	lastError = signal<string | null>(null);
 
+	private readonly turnSnapshotSignal = signal<TurnSnapshot | null>(null);
+
+	/** True se ci sono giocate annullabili nel turno corrente. */
+	readonly canUndoTurn = computed(() =>
+		this.turnSnapshotSignal() !== null && this.turnStep() === 'play_and_discard',
+	);
+
 	currentTeam = computed<RoundTeam | null>(() => {
 		const player = this.currentPlayer();
 		return player ? TEAM_BY_PLAYER[player] : null;
@@ -144,6 +180,45 @@ export class Round {
 	});
 
 	constructor(private readonly rules: Rules) {}
+
+	getState(): RoundSavedState {
+		return {
+			phase: this.phase(),
+			dealer: this.dealer(),
+			currentPlayer: this.currentPlayer(),
+			turnStep: this.turnStep(),
+			turnIndex: this.turnIndex(),
+			hands: this.hands(),
+			drawPile: this.drawPile(),
+			discardPile: this.discardPile(),
+			pozzetti: this.pozzetti(),
+			melds: this.melds(),
+			playerHasTakenPozzetto: this.playerHasTakenPozzetto(),
+			teamRoundState: this.teamRoundState(),
+			winnerPlayer: this.winnerPlayer(),
+			winnerTeam: this.winnerTeam(),
+			score: this.score(),
+		};
+	}
+
+	restoreState(s: RoundSavedState): void {
+		this.phase.set(s.phase);
+		this.dealer.set(s.dealer);
+		this.currentPlayer.set(s.currentPlayer);
+		this.turnStep.set(s.turnStep);
+		this.turnIndex.set(s.turnIndex);
+		this.hands.set(s.hands);
+		this.drawPile.set(s.drawPile);
+		this.discardPile.set(s.discardPile);
+		this.pozzetti.set(s.pozzetti);
+		this.melds.set(s.melds);
+		this.playerHasTakenPozzetto.set(s.playerHasTakenPozzetto);
+		this.teamRoundState.set(s.teamRoundState);
+		this.winnerPlayer.set(s.winnerPlayer);
+		this.winnerTeam.set(s.winnerTeam);
+		this.score.set(s.score);
+		this.lastError.set(null);
+	}
 
 	startHand() {
 		const deck = this.shuffleDeck(STARTER_DECK.concat(STARTER_DECK));
@@ -207,6 +282,7 @@ export class Round {
 		this.addCardsToHand(player, [card]);
 		this.turnStep.set('play_and_discard');
 		this.lastError.set(null);
+		this.turnSnapshotSignal.set(this.captureSnapshot(player, TEAM_BY_PLAYER[player]));
 
 		this.eventsSubject.next({
 			type: 'card_drawn',
@@ -229,6 +305,7 @@ export class Round {
 		this.discardPile.set([]);
 		this.turnStep.set('play_and_discard');
 		this.lastError.set(null);
+		this.turnSnapshotSignal.set(this.captureSnapshot(player, TEAM_BY_PLAYER[player]));
 
 		this.eventsSubject.next({
 			type: 'card_drawn',
@@ -237,6 +314,23 @@ export class Round {
 			cards: discardPile,
 		});
 
+		return true;
+	}
+
+	/**
+	 * Annulla tutte le giocate del turno corrente (calate e legature),
+	 * ripristinando la mano e i giochi a terra allo stato di inizio turno.
+	 * Disponibile solo durante la fase play_and_discard.
+	 */
+	undoTurn(): boolean {
+		if (this.phase() !== 'in_progress')
+			return this.rejectAction('La mano non è in corso.');
+		if (this.turnStep() !== 'play_and_discard')
+			return this.rejectAction('Annullamento disponibile solo nella fase di gioco.');
+		if (!this.turnSnapshotSignal())
+			return this.rejectAction('Nessuna giocata da annullare.');
+		this.applySnapshot();
+		this.lastError.set(null);
 		return true;
 	}
 
@@ -346,7 +440,13 @@ export class Round {
 		const hasTakenPozzetto = this.playerHasTakenPozzetto()[player];
 		const isClosingAttempt = hand.length === 1 && hasTakenPozzetto;
 		if (isClosingAttempt && !this.teamHasBurraco()[team]) {
-			return this.rejectAction('Per chiudere servono pozzetto preso e almeno un burraco.');
+			this.applySnapshot();
+			return this.rejectAction('Per chiudere servono pozzetto preso e almeno un burraco. Le carte giocate in questo turno sono state restituite.');
+		}
+		// Art. 14: non è possibile chiudere scartando una matta (jolly o 2 selvaggio)
+		if (isClosingAttempt && isWild(new DeckItem(discardCard))) {
+			this.applySnapshot();
+			return this.rejectAction('Non si può chiudere scartando una matta (Art. 14). Le carte giocate in questo turno sono state restituite.');
 		}
 
 		if (!this.removeCardsFromPlayer(player, [discardCard])) {
@@ -376,6 +476,33 @@ export class Round {
 
 		this.advanceTurn(player);
 		return true;
+	}
+
+	private captureSnapshot(player: RoundPlayer, team: RoundTeam): TurnSnapshot {
+		const trs = this.teamRoundState();
+		return {
+			player,
+			team,
+			hand: [...this.hands()[player]],
+			teamMelds: this.melds()[team].map((m) => [...m]),
+			pozzetti: this.pozzetti().map((p) => [...p]),
+			playerHasTakenPozzetto: { ...this.playerHasTakenPozzetto() },
+			teamRoundState: {
+				ours: { ...trs.ours, originalPozzetto: [...trs.ours.originalPozzetto] },
+				opponents: { ...trs.opponents, originalPozzetto: [...trs.opponents.originalPozzetto] },
+			},
+		};
+	}
+
+	private applySnapshot(): void {
+		const s = this.turnSnapshotSignal();
+		if (!s) return;
+		this.hands.update((h) => ({ ...h, [s.player]: s.hand }));
+		this.melds.update((m) => ({ ...m, [s.team]: s.teamMelds }));
+		this.pozzetti.set(s.pozzetti);
+		this.playerHasTakenPozzetto.set(s.playerHasTakenPozzetto);
+		this.teamRoundState.set(s.teamRoundState);
+		this.turnSnapshotSignal.set(null);
 	}
 
 	private ensureActionContext(step: RoundTurnStep): RoundPlayer | null {
@@ -509,6 +636,7 @@ export class Round {
 
 	private advanceTurn(previousPlayer: RoundPlayer) {
 		if (this.phase() !== 'in_progress') return;
+		this.turnSnapshotSignal.set(null);
 
 		const next = this.nextPlayer(previousPlayer);
 		this.currentPlayer.set(next);
@@ -665,7 +793,7 @@ export class Round {
 		if (value === '2') return 20;
 		if (value === 'A') return 15;
 		if (value === 'K' || value === 'Q' || value === 'J') return 10;
-		if (value === '10' || value === '9' || value === '8') return 10;
+		if (value === '10') return 10;
 		return 5;
 	}
 

@@ -3,6 +3,7 @@
 @if (cards()) {
 	<div
 		class="flex p-2 gap-2 flex-wrap"
+		[class.gap-0]="gap() != null"
 		[ngClass]="{
 			'flex p-2 gap-2 flex-wrap': layout() == 'grid',
 			grid: isStack,
@@ -13,6 +14,7 @@
 			<ui-card
 				[style.--offset.px]="offset * (item.faceDown ? 1 : -1)"
 				[style.--z]="i"
+				[style.margin-inline-start]="!isStack && gap() != null && i > 0 ? gap() / 4 + 'rem' : null"
 				(click)="toggleItem(item.uid)"
 				class="rounded-md z-[var(--z)] rotate-[var(--rotate)] [&>*]:translate-z-[calc(var(--prev-offset,var(--offset)))]"
 				[ngClass]="{
