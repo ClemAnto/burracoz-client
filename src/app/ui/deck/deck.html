@@ -1,38 +1,52 @@
 @let isStack = layout() == 'stack';
+@let isHorizontal = layout() == 'horizontal';
+@let isVertical = layout() == 'vertical';
 
 @if (cards()) {
-	<div
-		class="flex p-2 gap-2 flex-wrap"
-		[class.gap-0]="gap() != null"
+	<div [attr.data-layout]="layout()"
+		class="place-content-inherit"
 		[ngClass]="{
-			'flex p-2 gap-2 flex-wrap': layout() == 'grid',
-			grid: isStack,
-		}"
-	>
+			'flex': isHorizontal || isVertical,
+			'w-full h-(--max-box-h) my-auto': isHorizontal,
+			'flex-col h-full w-(--max-box-w) mx-auto max-w-full': isVertical,
+			'grid h-(--box-h) w-(--box-w)': isStack
+		}">
 		@for (item of list(); track item.uid; let i = $index) {
-			@let offset = isStack ? offsetCurve(i) : 0;
-			<ui-card
-				[style.--offset.px]="offset * (item.faceDown ? 1 : -1)"
-				[style.--z]="i"
-				[style.margin-inline-start]="!isStack && gap() != null && i > 0 ? gap() / 4 + 'rem' : null"
-				(click)="toggleItem(item.uid)"
-				class="rounded-md z-[var(--z)] rotate-[var(--rotate)] [&>*]:translate-z-[calc(var(--prev-offset,var(--offset)))]"
+			<div class="card-pivot relative  outline outline-amber-500"
 				[ngClass]="{
-					outline: selectedSet().has(item.uid),
-					'col-[1/1] row-[1/1]': isStack,
-				}"
-				[style.--tween-delay]="freezeds()[item.uid]"
-				[attr.tween-id]="item.uid"
-				[attr.tween-data]="
-					{
-						'--z': i,
-						'--prev-rot-y': item.faceDown ? '180deg' : '',
-						'--prev-offset': offset + 'px',
-					} | json
-				"
-				[faceDown]="item.faceDown"
-				[card]="item.tag"
-			/>
+					'w-[stretch] max-w-(--max-box-w)': isHorizontal,
+					'h-[stretch] max-h-(--max-box-h)': isVertical,
+					'col-[1/1] row-[1/1]': isStack
+				}">
+				
+				@let offset = isStack ? offsetCurve(i) : 0;
+				
+				<ui-card
+					[style.--offset.px]="offset * (item.faceDown ? 1 : -1)"
+					[style.--z]="i"
+					(click)="toggleItem(item.uid)"
+					class="
+						absolute left-1/2 top-1/2 -translate-1/2 
+						rounded-md z-(--z) rotate-(--rotate) 
+						[&>*]:translate-z-[calc(var(--prev-offset,var(--offset)))]"
+					[ngClass]="{
+						outline: selectedSet().has(item.uid),
+						
+					}"
+					[style.--tween-delay]="freezeds()[item.uid]"
+					[attr.tween-id]="item.uid"
+					[attr.tween-data]="
+						{
+							'--z': i,
+							'--prev-rot-y': item.faceDown ? '180deg' : '',
+							'--prev-offset': offset + 'px',
+						} | json
+					"
+					[faceDown]="item.faceDown"
+					[card]="item.tag"
+				/>
+				
+			</div>
 		}
 	</div>
 }

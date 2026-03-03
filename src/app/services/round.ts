@@ -4,7 +4,7 @@ import { DeckItem } from '../ui/deck/deck';
 import { parseCardValue, STARTER_DECK } from './cards';
 import { isWild, Rules } from './rules';
 
-export type RoundPlayer = 'east' | 'west' | 'north' | 'sud';
+export type RoundPlayer = 'east' | 'west' | 'north' | 'south';
 export type RoundTeam = 'opponents' | 'ours';
 export type RoundPhase = 'idle' | 'in_progress' | 'closed';
 export type RoundTurnStep = 'draw_or_collect' | 'play_and_discard';
@@ -120,15 +120,15 @@ type TurnSnapshot = {
 	teamRoundState: Record<RoundTeam, TeamRoundState>;
 };
 
-const PLAYER_ORDER: RoundPlayer[] = ['north', 'east', 'sud', 'west'];
+const PLAYER_ORDER: RoundPlayer[] = ['north', 'east', 'south', 'west'];
 const TEAM_BY_PLAYER: Record<RoundPlayer, RoundTeam> = {
 	east: 'opponents',
 	west: 'opponents',
 	north: 'ours',
-	sud: 'ours',
+	south: 'ours',
 };
 const TEAM_PLAYERS: Record<RoundTeam, [RoundPlayer, RoundPlayer]> = {
-	ours: ['north', 'sud'],
+	ours: ['north', 'south'],
 	opponents: ['east', 'west'],
 };
 
@@ -218,9 +218,11 @@ export class Round {
 		this.winnerTeam.set(s.winnerTeam);
 		this.score.set(s.score);
 		this.lastError.set(null);
+		this.turnSnapshotSignal.set(null);
 	}
 
 	startHand() {
+		this.turnSnapshotSignal.set(null);
 		const deck = this.shuffleDeck(STARTER_DECK.concat(STARTER_DECK));
 		const dealer = this.pickRandomPlayer();
 		const firstPlayer = this.nextPlayer(dealer);
@@ -651,6 +653,7 @@ export class Round {
 	}
 
 	private closeRound(winnerPlayer: RoundPlayer) {
+		this.turnSnapshotSignal.set(null);
 		const winnerTeam = TEAM_BY_PLAYER[winnerPlayer];
 		const score = this.calculateScore(winnerTeam);
 
@@ -851,7 +854,7 @@ function createEmptyHands(): Record<RoundPlayer, string[]> {
 		east: [],
 		west: [],
 		north: [],
-		sud: [],
+		south: [],
 	};
 }
 
@@ -867,7 +870,7 @@ function createEmptyPlayerPozzettiState(): Record<RoundPlayer, boolean> {
 		east: false,
 		west: false,
 		north: false,
-		sud: false,
+		south: false,
 	};
 }
 

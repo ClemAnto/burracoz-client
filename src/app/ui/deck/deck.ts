@@ -65,17 +65,25 @@ export function deckToString(deck: DeckItems): string {
 	return deck.toString();
 }
 
+const CARD_SIZE = {W:32,H:40}
+
 @Component({
 	selector: 'ui-deck',
 	imports: [CommonModule, Card],
 	templateUrl: './deck.html',
 	styleUrl: './deck.scss',
 	host: {
+		'[style.--box-h.px]': 'CARD_SIZE.H',
+		'[style.--box-w.px]': 'CARD_SIZE.W',
+		'[style.--max-box-h.px]': 'gap() + CARD_SIZE.H',
+		'[style.--max-box-w.px]': 'gap() + CARD_SIZE.W',
 		'[style.--rotate.deg]': 'rotate()',
 	},
 })
 export class Deck {
-	layout = input<'stack' | 'grid'>('grid');
+	CARD_SIZE = CARD_SIZE;
+
+	layout = input<'stack' | 'horizontal' | 'vertical'>('horizontal');
 
 	selectable = input<boolean>(false);
 	faceDown = input<boolean>(null);

@@ -111,7 +111,7 @@ export class Game {
 	/** Il mazziere estratto a sorte per questa mano. */
 	get dealer() { return this.round.dealer; }
 
-	/** Carte in mano a ciascun giocatore { east, west, north, sud }. */
+	/** Carte in mano a ciascun giocatore { east, west, north, south }. */
 	get hands() { return this.round.hands; }
 
 	/** Il tallone (carte rimanenti da pescare). */
@@ -134,6 +134,9 @@ export class Game {
 
 	/** Ultimo errore generato da un'azione non valida (null se nessun errore). */
 	get lastError() { return this.round.lastError; }
+
+	/** True se ci sono giocate annullabili nel turno corrente. */
+	get canUndoTurn() { return this.round.canUndoTurn; }
 
 	/** Giocatore che ha chiuso l'ultima mano. */
 	get winnerPlayer() { return this.round.winnerPlayer; }
@@ -273,6 +276,14 @@ export class Game {
 	 */
 	discard(card: string): boolean {
 		return this.round.discard(card);
+	}
+
+	/**
+	 * Annulla tutte le giocate del turno corrente, ripristinando
+	 * mano e giochi a terra allo stato di inizio turno (dopo la pesca).
+	 */
+	undoTurn(): boolean {
+		return this.round.undoTurn();
 	}
 
 	// ============================================================

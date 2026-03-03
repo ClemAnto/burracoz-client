@@ -5,5 +5,8 @@ import { Board } from '../board/board';
 	selector: 'ui-stage',
 	imports: [Board],
 	templateUrl: './stage.html',
+	host: {
+		class:'flex w-full h-full'
+	}
 })
 export class Stage {}

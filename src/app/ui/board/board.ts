@@ -10,17 +10,16 @@ import { Tweener } from '../tweener/tweener';
 	imports: [NzButtonModule, Deck, Tweener, UpperCasePipe, NgClass],
 	templateUrl: './board.html',
 	host: {
-		class: 'flex flex-col h-full w-full relative',
+		class: 'flex flex-col flex-1 min-h-0 w-full relative overflow-hidden',
 	},
 })
 export class Board {
-	// ViewChild con nome italiano per i deck dei giocatori
 	@ViewChild('drawPile')    drawPileRef:    Deck;
 	@ViewChild('discardPile') discardPileRef: Deck;
-	@ViewChild('nordDeck')    nordDeck:       Deck;
-	@ViewChild('sudDeck')     sudDeck:        Deck;
-	@ViewChild('estDeck')     estDeck:        Deck;
-	@ViewChild('ovestDeck')   ovestDeck:      Deck;
+	@ViewChild('northDeck')   northDeck:      Deck;
+	@ViewChild('southDeck')   southDeck:      Deck;
+	@ViewChild('eastDeck')    eastDeck:       Deck;
+	@ViewChild('westDeck')    westDeck:       Deck;
 
 	private game = inject(Game);
 
@@ -37,10 +36,10 @@ export class Board {
 	readonly theirMeldsData   = computed(() => this.game.melds().opponents);
 
 	// Mano fissa per ogni giocatore (ognuno resta nel suo lato)
-	readonly nordCards  = computed(() => this.game.hands().north ?? []);
-	readonly estCards   = computed(() => this.game.hands().east  ?? []);
-	readonly ovestCards = computed(() => this.game.hands().west  ?? []);
-	readonly sudCards   = computed(() => this.game.hands().sud   ?? []);
+	readonly northCards  = computed(() => this.game.hands().north ?? []);
+	readonly eastCards = computed(() => this.game.hands().east ?? []);
+	readonly westCards = computed(() => this.game.hands().west ?? []);
+	readonly southCards = computed(() => this.game.hands().south ?? []);
 
 	// ----------------------------------------------------------
 	// Stato della partita
@@ -57,7 +56,7 @@ export class Board {
 	readonly winnerPlayer = computed(() => this.game.winnerPlayer());
 
 	readonly playerLabel = computed(() => {
-		const labels: Record<string, string> = { north: 'NORD', sud: 'SUD', east: 'EST', west: 'OVEST' };
+		const labels: Record<string, string> = { north: 'NORD', south: 'SUD', east: 'EST', west: 'OVEST' };
 		return labels[this.game.currentPlayer()] ?? '';
 	});
 
@@ -68,6 +67,9 @@ export class Board {
 	readonly canPlay = computed(() =>
 		this.game.roundPhase() === 'in_progress' && this.game.turnStep() === 'play_and_discard',
 	);
+
+	/** True se ci sono giocate nel turno corrente annullabili con INDIETRO */
+	readonly canUndo = computed(() => this.game.canUndoTurn());
 
 	/** Zona NOI attiva: si può calare/legare su questa zona */
 	readonly ourZoneActive   = computed(() => this.currentTeam() === 'ours'      && this.canPlay());
@@ -84,7 +86,7 @@ export class Board {
 	nextHand()  { this.game.startNextHand(); }
 
 	resetGame() {
-		[this.nordDeck, this.sudDeck, this.estDeck, this.ovestDeck]
+		[this.northDeck, this.southDeck, this.eastDeck, this.westDeck]
 			.filter(Boolean)
 			.forEach(deck => deck.selecteds.set([]));
 		this.game.startGame();
@@ -144,6 +146,18 @@ export class Board {
 		}
 	}
 
+	/** Annulla tutte le giocate del turno corrente, restituendo le carte in mano */
+	undoTurn() {
+		const player = this.game.currentPlayer();
+		console.log(`[Board] Annulla turno — ${player}`);
+		if (this.game.undoTurn()) {
+			console.log(`[Board] Annulla OK`);
+			this.getActiveDeck()?.selecteds.set([]);
+		} else {
+			console.warn(`[Board] Annulla FALLITO: ${this.game.lastError()}`);
+		}
+	}
+
 	/** Scarta la singola carta selezionata, terminando il turno */
 	discard() {
 		const deck = this.getActiveDeck();
@@ -167,10 +181,10 @@ export class Board {
 	// Restituisce il Deck ViewChild del giocatore corrente
 	private getActiveDeck(): Deck | null {
 		switch (this.game.currentPlayer()) {
-			case 'north': return this.nordDeck;
-			case 'east':  return this.estDeck;
-			case 'west':  return this.ovestDeck;
-			case 'sud':   return this.sudDeck;
+			case 'north': return this.northDeck;
+			case 'east':  return this.eastDeck;
+			case 'west':  return this.westDeck;
+			case 'south': return this.southDeck;
 			default:      return null;
 		}
 	}

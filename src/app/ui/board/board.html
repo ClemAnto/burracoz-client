@@ -69,7 +69,9 @@
 <!-- ============================================================
   HEADER: stato partita, turno corrente, azioni
 ============================================================ -->
-<header class="p-2 flex gap-3 items-center flex-wrap">
+<header class="p-2 flex gap-3 items-center flex-wrap z-10">
+
+
 	@if (roundPhase() === 'idle') {
 		<button nz-button nzType="primary" (click)="resetGame()">NUOVA PARTITA</button>
 	}
@@ -82,6 +84,9 @@
 
 		@if (canPlay()) {
 			<button nz-button nzDanger nzType="primary" (click)="discard()">SCARTA</button>
+			@if (canUndo()) {
+				<button nz-button (click)="undoTurn()">← INDIETRO</button>
+			}
 		}
 	}
 
@@ -98,22 +103,24 @@
   TAVOLO DI GIOCO — layout fisso per tutti e 4 i giocatori
   Il contorno verde evidenzia il giocatore di turno
 ============================================================ -->
-<div class="flex flex-col gap-2 p-2 max-w-full outline outline-blue-600 grow">
+<div class="flex flex-col gap-2 p-2 max-w-full outline outline-blue-600 grow 
+	overflow-hidden isolate">
 	<ui-tweener [disabled]="!animate()" (tweenComplete)="onTweenComplete()">
 
 		<!-- NORD (in alto) -->
 		<header
-			class="min-h-10 w-full outline"
+			class="w-full outline"
 			[class.outline-green-400]="currentPlayer() === 'north'"
 			[class.outline-amber-500]="currentPlayer() !== 'north'"
 		>
+			
 			<ui-deck
-				#nordDeck
-				[cards]="nordCards()"
+				#northDeck
+				[cards]="northCards()"
 				[faceDown]="!debug() && currentPlayer() !== 'north'"
 				[selectable]="currentPlayer() === 'north'"
 				[autosort]="true"
-				class="z-3"
+				class="z-3 place-content-center"
 			/>
 		</header>
 
@@ -122,15 +129,20 @@
 
 			<!-- EST (colonna sinistra) -->
 			<div
-				class="flex items-center outline"
+				id="east-col"
+				class="flex outline relative"
 				[class.outline-green-400]="currentPlayer() === 'east'"
 				[class.outline-amber-500]="currentPlayer() !== 'east'"
 			>
+				
 				<ui-deck
-				#estDeck
+					#eastDeck
+					class="absolute h-full w-full place-content-center"
+					layout="vertical"
 					[autosort]="true"
+					[gap]="-10"
 					[rotate]="90"
-					[cards]="estCards()"
+					[cards]="eastCards()"
 					[faceDown]="!debug() && currentPlayer() !== 'east'"
 					[selectable]="currentPlayer() === 'east'"
 				/>
@@ -152,6 +164,8 @@
 					<ui-deck
 						[style.--z]="$index + 4"
 						class="relative z-(--z)"
+						layout="vertical"
+						[gap]="-10"
 						[ngClass]="ourZoneActive() ? 'cursor-pointer hover:ring-2 hover:ring-blue-500 rounded' : ''"
 						[cards]="meld"
 						[selectable]="false"
@@ -176,6 +190,8 @@
 						class="relative z-(--z)"
 						[ngClass]="theirZoneActive() ? 'cursor-pointer hover:ring-2 hover:ring-red-500 rounded' : ''"
 						[cards]="meld"
+						layout="vertical"
+						[gap]="-10"
 						[selectable]="false"
 						(click)="theirZoneActive() && attachToMeld($index); $event.stopPropagation()"
 					/>
@@ -184,24 +200,30 @@
 
 			<!-- OVEST (colonna destra) -->
 			<div
-				class="flex items-center outline"
+				id="weast-col"
+				class="flex outline relative"
 				[class.outline-green-400]="currentPlayer() === 'west'"
 				[class.outline-amber-500]="currentPlayer() !== 'west'"
 			>
+
 				<ui-deck
-					#ovestDeck
+					#westDeck
+					class="absolute h-full w-full place-content-center"
+					layout="vertical"
 					[autosort]="true"
-					[gap]="-3"
-					[rotate]="-90"
-					[cards]="ovestCards()"
+					[gap]="-10"
+					[rotate]="90"
+					[cards]="westCards()"
 					[faceDown]="!debug() && currentPlayer() !== 'west'"
 					[selectable]="currentPlayer() === 'west'"
 				/>
+				
+				
 			</div>
 		</section>
 
 		<!-- TALLONE e MONTE SCARTI -->
-		<footer class="flex gap-4">
+		<footer class="flex gap-4 shrink-0">
 			<ui-deck
 				#drawPile
 				[cards]="drawPileCards()"
@@ -224,19 +246,23 @@
 
 		<!-- SUD (in basso) -->
 		<div
-			class="outline min-h-10"
-			[class.outline-green-400]="currentPlayer() === 'sud'"
-			[class.outline-amber-500]="currentPlayer() !== 'sud'"
+			class="w-full outline"
+			[class.outline-green-400]="currentPlayer() === 'south'"
+			[class.outline-amber-500]="currentPlayer() !== 'south'"
 		>
 			<ui-deck
-				#sudDeck
-				[cards]="sudCards()"
-				[faceDown]="!debug() && currentPlayer() !== 'sud'"
-				[selectable]="currentPlayer() === 'sud'"
+				#southDeck
+				layout="horizontal"
+				[cards]="southCards()"
+				[faceDown]="!debug() && currentPlayer() !== 'south'"
+				[selectable]="currentPlayer() === 'south'"
 				[autosort]="true"
-				class="z-3 min-h-25"
+				class="z-3 place-content-center"
 			/>
 		</div>
 
 	</ui-tweener>
+	<img
+		class="absolute left-0 top-0 w-full h-full -z-10"
+		src="/images/table_bg.jpg" />
 </div>
