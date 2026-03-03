@@ -1,8 +1,9 @@
 import { NgClass, UpperCasePipe } from '@angular/common';
 import { Component, computed, inject, signal, ViewChild } from '@angular/core';
 import { NzButtonModule } from 'ng-zorro-antd/button';
+import { STARTER_DECK } from '../../services/cards';
 import { Game } from '../../services/game';
-import { Deck } from '../deck/deck';
+import { Deck, DeckItem } from '../deck/deck';
 import { Tweener } from '../tweener/tweener';
 
 @Component({
@@ -27,19 +28,59 @@ export class Board {
 	debug = signal(true);
 
 	// ----------------------------------------------------------
+	// Card pool — 2 DeckItem stabili per carta (doppio mazzo = 108 carte)
+	// Garantisce che lo stesso uid segua la carta fisica tra deck diversi,
+	// permettendo al Tweener FLIP di collegare rimozione e aggiunta.
+	// ----------------------------------------------------------
+
+	private readonly cardPool: Map<string, DeckItem[]> = new Map(
+		STARTER_DECK.map(card => [card, [new DeckItem(card), new DeckItem(card)]])
+	);
+
+	/** Assegna DeckItem dal pool (FIFO) a tutte le aree in ordine fisso */
+	private readonly resolvedCards = computed(() => {
+		const hands = this.game.hands();
+		const melds = this.game.melds();
+		const cp    = this.game.currentPlayer();
+		const dbg   = this.debug();
+
+		const avail = new Map<string, DeckItem[]>();
+		this.cardPool.forEach((items, tag) => avail.set(tag, items.slice()));
+
+		const assign = (tags: string[], fd: boolean): DeckItem[] =>
+			tags.map(tag => {
+				const pool = avail.get(tag);
+				const item = pool?.shift() ?? new DeckItem(tag, fd);
+				item.faceDown = fd;
+				return item;
+			});
+
+		return {
+			drawPile:    assign(this.game.drawPile(), true),
+			discardPile: assign(this.game.discardPile(), false),
+			north:  assign(hands.north ?? [], !dbg && cp !== 'north'),
+			east:   assign(hands.east  ?? [], !dbg && cp !== 'east'),
+			south:  assign(hands.south ?? [], !dbg && cp !== 'south'),
+			west:   assign(hands.west  ?? [], !dbg && cp !== 'west'),
+			ourMelds:   melds.ours.map(m => assign(m, false)),
+			theirMelds: melds.opponents.map(m => assign(m, false)),
+		};
+	});
+
+	// ----------------------------------------------------------
 	// Dati di gioco dai signal del Game service
 	// ----------------------------------------------------------
 
-	readonly drawPileCards    = computed(() => this.game.drawPile());
-	readonly discardPileCards = computed(() => this.game.discardPile());
-	readonly ourMeldsData     = computed(() => this.game.melds().ours);
-	readonly theirMeldsData   = computed(() => this.game.melds().opponents);
+	readonly drawPileCards    = computed(() => this.resolvedCards().drawPile);
+	readonly discardPileCards = computed(() => this.resolvedCards().discardPile);
+	readonly ourMeldsData     = computed(() => this.resolvedCards().ourMelds);
+	readonly theirMeldsData   = computed(() => this.resolvedCards().theirMelds);
 
 	// Mano fissa per ogni giocatore (ognuno resta nel suo lato)
-	readonly northCards  = computed(() => this.game.hands().north ?? []);
-	readonly eastCards = computed(() => this.game.hands().east ?? []);
-	readonly westCards = computed(() => this.game.hands().west ?? []);
-	readonly southCards = computed(() => this.game.hands().south ?? []);
+	readonly northCards = computed(() => this.resolvedCards().north);
+	readonly eastCards  = computed(() => this.resolvedCards().east);
+	readonly westCards  = computed(() => this.resolvedCards().west);
+	readonly southCards = computed(() => this.resolvedCards().south);
 
 	// ----------------------------------------------------------
 	// Stato della partita

@@ -13,6 +13,11 @@ type TestCase = {
 const TEST: TestCase[] = [
 	{
 		type: 'validateRun',
+		inputs: ['4♥️ 6♥️ 2♦️'],
+		outputs: '4♥️ 2♦️ 6♥️',
+	},
+	{
+		type: 'validateRun',
 		inputs: ['7♥️ A♥️ 2♥️ 3♥️ * 5♥️ 6♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️'],
 		outputs: 'A♥️ 2♥️ 3♥️ * 5♥️ 6♥️ 7♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️',
 	},

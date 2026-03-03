@@ -25,10 +25,7 @@
 					[style.--offset.px]="offset * (item.faceDown ? 1 : -1)"
 					[style.--z]="i"
 					(click)="toggleItem(item.uid)"
-					class="
-						absolute left-1/2 top-1/2 -translate-1/2 
-						rounded-md z-(--z) rotate-(--rotate) 
-						[&>*]:translate-z-[calc(var(--prev-offset,var(--offset)))]"
+					class="rounded-md z-(--z) *:translate-z-[calc(var(--prev-offset,var(--offset)))]"
 					[ngClass]="{
 						outline: selectedSet().has(item.uid),
 						

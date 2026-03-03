@@ -1,5 +1,12 @@
 :host {
 	ui-card {
+		// Posizionamento assoluto centrato nel card-pivot senza usare
+		// la proprietà CSS `translate`, che è riservata al Tweener FLIP.
+		// Usa left/top + calc con le variabili del Deck padre.
+		position: absolute;
+		left: calc(50% - var(--box-w) / 2);
+		top: calc(50% - var(--box-h) / 2);
+
 		// Rotazione Z della singola carta, guidata da --rotate del Deck padre.
 		// Compone con il rotateY del flip fronte/retro senza conflitti
 		// perché la proprietà CSS `rotate` è applicata dopo `transform`.
