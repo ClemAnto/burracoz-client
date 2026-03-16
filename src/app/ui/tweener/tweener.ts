@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, input, OnDestroy, output, signal } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, input, NgZone, OnDestroy, output, signal } from '@angular/core';
 
 const { round } = Math;
 
@@ -26,7 +26,7 @@ export class Tweener implements AfterViewInit, OnDestroy {
 	pendings = 0;
 	tweenComplete = output<any>();
 
-	constructor(protected ref: ElementRef) {}
+	constructor(protected ref: ElementRef, private zone: NgZone) {}
 
 	ngAfterViewInit() {
 		const host = this.ref.nativeElement.parentElement;
@@ -40,6 +40,7 @@ export class Tweener implements AfterViewInit, OnDestroy {
 	}
 
 	startTracking() {
+		this.zone.runOutsideAngular(() => {
 		this.silentRefresh();
 
 		this.mutations = new MutationObserver((mutations) => {
@@ -96,6 +97,7 @@ export class Tweener implements AfterViewInit, OnDestroy {
 		// animatePositions call doesn't mistake a layout shift for card movement.
 		this.resizeObserver = new ResizeObserver(() => this.silentRefresh());
 		this.resizeObserver.observe(this.host());
+		});
 	}
 
 	checkTweens() {
@@ -118,7 +120,7 @@ export class Tweener implements AfterViewInit, OnDestroy {
 
 	/** Updates stored positions only — does not trigger any animation. */
 	silentRefresh() {
-		this.host()?.querySelectorAll('[tween-id]').forEach((node) => {
+		this.host()?.querySelectorAll('[tween-id]:not(.tweening)').forEach((node) => {
 			if (node instanceof HTMLElement) {
 				const { x, y } = node.getBoundingClientRect();
 				node.setAttribute('pos', `${round(x)},${round(y)}`);
@@ -130,7 +132,7 @@ export class Tweener implements AfterViewInit, OnDestroy {
 	animatePositions() {
 		var count = 0;
 		this.host()
-			.querySelectorAll('[tween-id]:not(.tweening)')
+			.querySelectorAll('[tween-id]:not(.tweening):not(.cleaned)')
 			.forEach((node) => {
 				if (node instanceof HTMLElement) {
 					const tweenId = node.getAttribute('tween-id');
@@ -159,11 +161,13 @@ export class Tweener implements AfterViewInit, OnDestroy {
 							node.removeAttribute('tween-data');
 							node.removeAttribute('tween-data-prev');
 							this.pendings = Math.max(0, this.pendings - 1);
-							this.tweenComplete.emit({
-								id: tweenId,
-								target: node,
-								pendings: this.pendings,
-							});
+							this.zone.run(() =>
+								this.tweenComplete.emit({
+									id: tweenId,
+									target: node,
+									pendings: this.pendings,
+								}),
+							);
 						});
 
 						requestAnimationFrame(() => {
@@ -176,7 +180,7 @@ export class Tweener implements AfterViewInit, OnDestroy {
 								node.style.setProperty(key, '');
 							}
 						});
-					}
+					} 
 					node.setAttribute('pos', `${round(x)},${round(y)}`);
 				}
 			});
@@ -188,6 +192,7 @@ function onAllTransitionsDone(el: HTMLElement, callback: () => void) {
 	let running = false;
 
 	const cleanup = () => {
+		//el.classList.add("cleaned");
 		el.removeEventListener('transitionstart', onStart);
 		el.removeEventListener('transitionend', onFinish);
 		el.removeEventListener('transitioncancel', onFinish);
@@ -211,4 +216,5 @@ function onAllTransitionsDone(el: HTMLElement, callback: () => void) {
 	el.addEventListener('transitionstart', onStart);
 	el.addEventListener('transitionend', onFinish);
 	el.addEventListener('transitioncancel', onFinish);
+	el.classList.remove("cleaned");
 }

@@ -13,6 +13,7 @@ type SimpleSuit = 'h' | 'd' | 's' | 'c' | '♣️' | '♠️' | '♦️' | '♥�
 	//'[class]': `faceDown() ? 'rotate-y-180' : ''`
 	host: {
 		'[style.--rot-y.deg]': 'faceDown() ? 180 : 0',
+		'[attr.data-card]': 'card()'
 	},
 })
 export class Card {

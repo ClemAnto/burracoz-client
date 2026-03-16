@@ -1,13 +1,17 @@
 import { Injectable, computed, effect, signal } from '@angular/core';
 import { Subject } from 'rxjs';
-import { Round, RoundPlayer, RoundSavedState, RoundScore, RoundTeam } from './round';
+import { LocalStorage } from './local-storage';
+import { Round, RoundPhase, RoundPlayer, RoundSavedState, RoundScore, RoundTeam } from './round';
 
 // ============================================================
 // TIPI DI STATO E EVENTI
 // ============================================================
 
-/** Fase della partita (multi-mano). */
-export type GamePhase = 'idle' | 'playing' | 'ended';
+export enum GamePhase {
+	Idle    = 'idle',
+	Playing = 'playing',
+	Ended   = 'ended',
+}
 
 /** Risultato di una singola mano completata. */
 export type HandResult = {
@@ -30,12 +34,19 @@ type GameSavedState = {
 	round: RoundSavedState;
 };
 
+export enum GameEventType {
+	GameStarted = 'game_started',
+	HandStarted = 'hand_started',
+	HandEnded   = 'hand_ended',
+	GameEnded   = 'game_ended',
+}
+
 /** Eventi emessi a livello di partita. */
 export type GameEvent =
-	| { type: 'game_started' }
-	| { type: 'hand_started'; handIndex: number }
-	| { type: 'hand_ended'; result: HandResult }
-	| { type: 'game_ended'; winner: RoundTeam; totalScore: GameTotalScore };
+	| { type: GameEventType.GameStarted }
+	| { type: GameEventType.HandStarted; handIndex: number }
+	| { type: GameEventType.HandEnded;   result: HandResult }
+	| { type: GameEventType.GameEnded;   winner: RoundTeam; totalScore: GameTotalScore };
 
 // ============================================================
 // SERVIZIO GAME
@@ -68,7 +79,7 @@ export class Game {
 	// ----------------------------------------------------------
 
 	/** Fase della partita: idle → playing → ended. */
-	readonly phase = signal<GamePhase>('idle');
+	readonly phase = signal<GamePhase>(GamePhase.Idle);
 
 	/** Numero progressivo della mano corrente (0 = nessuna mano iniziata). */
 	readonly handIndex = signal<number>(0);
@@ -152,14 +163,13 @@ export class Game {
 	// ----------------------------------------------------------
 
 	/** Emette eventi a livello di partita (game_started, hand_started, ecc.). */
-	private readonly gameEventsSubject = new Subject<GameEvent>();
-	readonly gameEvents = this.gameEventsSubject.asObservable();
+	readonly gameEvents = new Subject<GameEvent>();
 
 	/**
 	 * Ri-espone lo stream di eventi del Round corrente.
 	 * Getter per evitare riferimento a `this.round` prima dell'inizializzazione.
 	 */
-	get roundEvents() { return this.round.events$; }
+	get roundEvents() { return this.round.events; }
 
 	// ============================================================
 	// COSTRUTTORE
@@ -167,16 +177,20 @@ export class Game {
 
 	private static readonly STORAGE_KEY = 'burracoz_v1';
 
-	constructor(private readonly round: Round) {
+	constructor(private readonly round: Round, private readonly storage: LocalStorage) {
 		// Intercetta la chiusura del round per registrare il risultato
 		// e aggiornare lo stato del game.
-		this.round.events$.subscribe((event) => {
+		this.round.events.subscribe((event) => {
 			if (event.type === 'round_closed') {
 				this.onRoundClosed(event.winnerPlayer, event.winnerTeam, event.score);
 			}
 		});
 
 		this.loadFromStorage();
+
+		if (this.round.phase() === RoundPhase.Idle) {
+			this.round.prepareDeck();
+		}
 
 		effect(() => {
 			const state: GameSavedState = {
@@ -185,9 +199,7 @@ export class Game {
 				handHistory: this.handHistory(),
 				round: this.round.getState(),
 			};
-			try {
-				localStorage.setItem(Game.STORAGE_KEY, JSON.stringify(state));
-			} catch { /* quota exceeded o SSR */ }
+			this.storage.set(Game.STORAGE_KEY, state);
 		});
 	}
 
@@ -199,11 +211,23 @@ export class Game {
 	 * Avvia una nuova partita: resetta lo storico, poi inizia la prima mano.
 	 * Corrisponde al pulsante START nella UI.
 	 */
-	startGame(): void {
+	/**
+	 * Resetta la partita e torna alla schermata iniziale (mazzo visibile, nessuna carta distribuita).
+	 */
+	async resetGame() {
 		this.handHistory.set([]);
 		this.handIndex.set(0);
-		this.phase.set('playing');
-		this.gameEventsSubject.next({ type: 'game_started' });
+		this.phase.set(GamePhase.Idle);
+		await this.round.prepareDeck();
+	}
+
+	/**
+	 * Avvia la partita: distribuisce le carte dal mazzo già presente sul tavolo.
+	 * Corrisponde al pulsante INIZIA nella UI.
+	 */
+	startGame(): void {
+		this.phase.set(GamePhase.Playing);
+		this.gameEvents.next({ type: GameEventType.GameStarted });
 		this.startHand();
 	}
 
@@ -212,7 +236,7 @@ export class Game {
 	 * Non fa nulla se la partita non è in corso.
 	 */
 	startNextHand(): void {
-		if (this.phase() !== 'playing') return;
+		if (this.phase() !== GamePhase.Playing) return;
 		this.startHand();
 	}
 
@@ -299,23 +323,19 @@ export class Game {
 	private startHand(): void {
 		this.handIndex.update((n) => n + 1);
 		this.round.startHand();
-		this.gameEventsSubject.next({
-			type: 'hand_started',
+		this.gameEvents.next({
+			type: GameEventType.HandStarted,
 			handIndex: this.handIndex(),
 		});
 	}
 
 	private loadFromStorage(): void {
-		try {
-			const json = localStorage.getItem(Game.STORAGE_KEY);
-			if (!json) return;
-			const state: GameSavedState = JSON.parse(json);
-			if (!state?.round) return;
-			this.phase.set(state.gamePhase);
-			this.handIndex.set(state.handIndex);
-			this.handHistory.set(state.handHistory ?? []);
-			this.round.restoreState(state.round);
-		} catch { /* JSON malformato o storage non disponibile */ }
+		const state = this.storage.get<GameSavedState>(Game.STORAGE_KEY);
+		if (!state?.round) return;
+		this.phase.set(state.gamePhase);
+		this.handIndex.set(state.handIndex);
+		this.handHistory.set(state.handHistory ?? []);
+		this.round.restoreState(state.round);
 	}
 
 	/**
@@ -338,7 +358,7 @@ export class Game {
 		};
 
 		this.handHistory.update((h) => h.concat(result));
-		this.gameEventsSubject.next({ type: 'hand_ended', result });
+		this.gameEvents.next({ type: GameEventType.HandEnded, result });
 
 		// TODO futuro: confrontare totalScore con la soglia di fine partita
 		// e chiamare this.endGame() se la partita è terminata.

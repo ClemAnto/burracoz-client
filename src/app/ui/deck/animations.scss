@@ -1,0 +1,19 @@
+.max-w-from-0 {
+	transition: max-width 200ms ease;
+	@starting-style { max-width: 0; }
+}
+
+.max-w-to-0 {
+	max-width: 0;
+	transition: max-width 200ms ease;
+}
+
+.max-h-from-0 {
+	transition: max-height 200ms ease;
+	@starting-style { max-height: 0; }
+}
+
+.max-h-to-0 {
+	max-height: 0;
+	transition: max-height 200ms ease;
+}

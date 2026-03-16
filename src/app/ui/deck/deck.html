@@ -12,7 +12,9 @@
 			'grid h-(--box-h) w-(--box-w)': isStack
 		}">
 		@for (item of list(); track item.uid; let i = $index) {
-			<div class="card-pivot relative  outline outline-amber-500"
+			<div class="card-pivot relative outline outline-dashed outline-amber-500"
+				[animate.enter]="isVertical ? 'max-h-from-0' : isHorizontal ? 'max-w-from-0' : ''"
+				[animate.leave]="isVertical ? 'max-h-to-0' : isHorizontal ? 'max-w-to-0' : ''"
 				[ngClass]="{
 					'w-[stretch] max-w-(--max-box-w)': isHorizontal,
 					'h-[stretch] max-h-(--max-box-h)': isVertical,
@@ -37,6 +39,7 @@
 							'--z': i,
 							'--prev-rot-y': item.faceDown ? '180deg' : '',
 							'--prev-offset': offset + 'px',
+							'--rotate': (rotate() ?? 0) + 'deg',
 						} | json
 					"
 					[faceDown]="item.faceDown"

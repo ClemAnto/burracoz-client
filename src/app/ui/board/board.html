@@ -72,14 +72,14 @@
 <header class="p-2 flex gap-3 items-center flex-wrap z-10">
 
 
-	@if (roundPhase() === 'idle') {
-		<button nz-button nzType="primary" (click)="resetGame()">NUOVA PARTITA</button>
+	@if (roundPhase() === RoundPhase.Idle) {
+		<button nz-button nzType="primary" (click)="startGame()">INIZIA</button>
 	}
 
-	@if (roundPhase() === 'in_progress') {
-		<span class="font-semibold">Turno di <strong>{{ playerLabel() }}</strong></span>
+	@if (roundPhase() === RoundPhase.InProgress) {
+		<span class="font-semibold">Turno di <strong>{{ currentPlayer() }}</strong></span>
 		<span class="text-gray-400 text-sm">
-			{{ turnStep() === 'draw_or_collect' ? '— Pesca o raccogli gli scarti' : '— Gioca e scarta' }}
+			{{ turnStep() === RoundTurnStep.DrawOrCollect ? '— Pesca o raccogli gli scarti' : '— Gioca e scarta' }}
 		</span>
 
 		@if (canPlay()) {
@@ -94,7 +94,7 @@
 		<span class="text-red-500 text-sm">⚠ {{ lastError() }}</span>
 	}
 
-	@if (roundPhase() !== 'idle') {
+	@if (roundPhase() !== RoundPhase.Idle) {
 		<button nz-button nzDanger class="ml-auto" (click)="resetGame()">RESET</button>
 	}
 </header>
@@ -118,7 +118,6 @@
 				#northDeck
 				[cards]="northCards()"
 				[selectable]="currentPlayer() === 'north'"
-				[autosort]="true"
 				class="z-3 place-content-center"
 			/>
 		</header>
@@ -138,7 +137,6 @@
 					#eastDeck
 					class="absolute h-full w-full place-content-center"
 					layout="vertical"
-					[autosort]="true"
 					[gap]="-10"
 					[rotate]="90"
 					[cards]="eastCards()"
@@ -208,7 +206,6 @@
 					#westDeck
 					class="absolute h-full w-full place-content-center"
 					layout="vertical"
-					[autosort]="true"
 					[gap]="-10"
 					[rotate]="90"
 					[cards]="westCards()"
@@ -233,6 +230,7 @@
 				#discardPile
 				[cards]="discardPileCards()"
 				layout="stack"
+				[faceDown]="false"
 				(click)="canDraw() && willTakeDiscardPile()"
 				class="z-2 outline outline-amber-500 grow transition-all"
 				[ngClass]="canDraw() ? 'cursor-pointer hover:ring-2 hover:ring-amber-400' : 'opacity-40 cursor-default'"
@@ -250,7 +248,7 @@
 				layout="horizontal"
 				[cards]="southCards()"
 				[selectable]="currentPlayer() === 'south'"
-				[autosort]="true"
+				[faceDown]="false"
 				class="z-3 place-content-center"
 			/>
 		</div>

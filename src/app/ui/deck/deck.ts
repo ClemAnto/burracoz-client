@@ -39,11 +39,13 @@ export class DeckItem {
 
 	constructor(card: string, faceDown: boolean = false) {
 		this.uid = DeckItem.uid++;
+		
 		this.value = parseCardValue(card);
 		this.suit = parseCardSuit(card);
 		this.color = parseCardColor(this.suit || card);
 		this.faceDown = faceDown;
 		this.tag = this.toString();
+		console.log("UID: " + this.uid + " - " + this.tag);
 	}
 
 	toString() {
@@ -71,7 +73,7 @@ const CARD_SIZE = {W:32,H:40}
 	selector: 'ui-deck',
 	imports: [CommonModule, Card],
 	templateUrl: './deck.html',
-	styleUrl: './deck.scss',
+	styleUrls: ['./deck.scss', './animations.scss'],
 	host: {
 		'[style.--box-h.px]': 'CARD_SIZE.H',
 		'[style.--box-w.px]': 'CARD_SIZE.W',
@@ -96,10 +98,14 @@ export class Deck {
 	cards = input<string[] | DeckItem[]>();
 
 	list = linkedSignal<DeckItem[]>(() => {
+		const fd = this.faceDown();
 		const items = this.cards().map((c) => {
-			if (typeof c == 'string') return new DeckItem(c, this.faceDown());
+			if (typeof c == 'string') return new DeckItem(c, fd);
+			if (fd !== null) c.faceDown = fd;
 			return c;
 		});
+		//return items;
+
 		if (!this.autosort()) return items;
 		return [...items].sort(sortBySuitThenRank);
 	});
@@ -115,7 +121,14 @@ export class Deck {
 	constructor(private Rules: Rules) {}
 
 	shuffle() {
-		this.list.update((items) => items.sort((a, b) => Math.random() - 0.5));
+		this.list.update((items) => {
+			const arr = items.slice();
+			for (let i = arr.length - 1; i > 0; i--) {
+				const j = Math.floor(Math.random() * (i + 1));
+				[arr[i], arr[j]] = [arr[j], arr[i]];
+			}
+			return arr;
+		});
 	}
 
 	toggleItem(uid: number) {
@@ -158,9 +171,11 @@ export class Deck {
 	}
 
 	take(amount: number = 0): DeckItem[] {
-		const items = this.list();
-		const taken = items.splice(-amount, amount);
-		this.list.set(items);
+		let taken: DeckItem[] = [];
+		this.list.update((items) => {
+			taken = items.splice(-amount, amount);
+			return [...items];
+		});
 		return taken;
 	}
 
