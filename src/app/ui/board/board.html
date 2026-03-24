@@ -42,8 +42,8 @@
 						</tr>
 						<tr>
 							<td class="py-0.5 text-gray-600">Pozzetto non preso</td>
-							<td class="text-right text-red-500">-{{ s.ours.breakdown.pozzettoNotTakenPenalty }}</td>
-							<td class="text-right text-red-500">-{{ s.opponents.breakdown.pozzettoNotTakenPenalty }}</td>
+							<td class="text-right text-red-500">-{{ s.ours.breakdown.potNotTakenPenalty }}</td>
+							<td class="text-right text-red-500">-{{ s.opponents.breakdown.potNotTakenPenalty }}</td>
 						</tr>
 						<tr class="border-t font-bold">
 							<td class="pt-1">TOTALE</td>
@@ -94,8 +94,8 @@
 		<span class="text-red-500 text-sm">⚠ {{ lastError() }}</span>
 	}
 
+	<button nz-button nzDanger class="ml-auto" (click)="resetGame()">RESET</button>
 	@if (roundPhase() !== RoundPhase.Idle) {
-		<button nz-button nzDanger class="ml-auto" (click)="resetGame()">RESET</button>
 	}
 </header>
 
@@ -105,19 +105,21 @@
 ============================================================ -->
 <div class="flex flex-col gap-2 p-2 max-w-full outline outline-blue-600 grow 
 	overflow-hidden isolate">
-	<ui-tweener [disabled]="!animate()" (tweenComplete)="onTweenComplete()">
+	<ui-tweener #tweener [disabled]="!animate()" (tweenComplete)="onTweenComplete()">
 
 		<!-- NORD (in alto) -->
 		<header
 			class="w-full outline"
-			[class.outline-green-400]="currentPlayer() === 'north'"
-			[class.outline-amber-500]="currentPlayer() !== 'north'"
+			[class.outline-green-400]="currentPlayer() === PlayerSide.North"
+			[class.outline-amber-500]="currentPlayer() !== PlayerSide.North"
 		>
 			
 			<ui-deck
 				#northDeck
+				[animate]="animate()"
 				[cards]="northCards()"
-				[selectable]="currentPlayer() === 'north'"
+				[faceDown]="debug() ? false : true"
+				[selectable]="currentPlayer() === PlayerSide.North && turnStep() === RoundTurnStep.PlayAndDiscard"
 				class="z-3 place-content-center"
 			/>
 		</header>
@@ -129,18 +131,20 @@
 			<div
 				id="east-col"
 				class="flex outline relative"
-				[class.outline-green-400]="currentPlayer() === 'east'"
-				[class.outline-amber-500]="currentPlayer() !== 'east'"
+				[class.outline-green-400]="currentPlayer() === PlayerSide.East"
+				[class.outline-amber-500]="currentPlayer() !== PlayerSide.East"
 			>
 				
 				<ui-deck
 					#eastDeck
+				[animate]="animate()"
 					class="absolute h-full w-full place-content-center"
 					layout="vertical"
 					[gap]="-10"
 					[rotate]="90"
 					[cards]="eastCards()"
-					[selectable]="currentPlayer() === 'east'"
+					[faceDown]="debug() ? false : true"
+					[selectable]="currentPlayer() === PlayerSide.East && turnStep() === RoundTurnStep.PlayAndDiscard"
 				/>
 			</div>
 
@@ -198,18 +202,20 @@
 			<div
 				id="weast-col"
 				class="flex outline relative"
-				[class.outline-green-400]="currentPlayer() === 'west'"
-				[class.outline-amber-500]="currentPlayer() !== 'west'"
+				[class.outline-green-400]="currentPlayer() === PlayerSide.West"
+				[class.outline-amber-500]="currentPlayer() !== PlayerSide.West"
 			>
 
 				<ui-deck
 					#westDeck
+				[animate]="animate()"
 					class="absolute h-full w-full place-content-center"
 					layout="vertical"
 					[gap]="-10"
 					[rotate]="90"
 					[cards]="westCards()"
-					[selectable]="currentPlayer() === 'west'"
+					[faceDown]="debug() ? false : true"
+					[selectable]="currentPlayer() === PlayerSide.West && turnStep() === RoundTurnStep.PlayAndDiscard"
 				/>
 				
 				
@@ -220,34 +226,56 @@
 		<footer class="flex gap-4 shrink-0">
 			<ui-deck
 				#drawPile
+				[animate]="animate()"
 				[cards]="drawPileCards()"
 				layout="stack"
+				[faceDown]="true"
 				(click)="canDraw() && willTakeFromDrawPile()"
-				class="z-1 outline outline-amber-500 transition-all"
-				[ngClass]="canDraw() ? 'cursor-pointer hover:ring-2 hover:ring-amber-400' : 'opacity-40 cursor-default'"
+				class="z-1 outline transition-all"
+				[ngClass]="canDraw() ? 'outline-green-400 cursor-pointer hover:ring-2 hover:ring-green-400' : 'outline-amber-500 cursor-default'"
 			/>
 			<ui-deck
 				#discardPile
+				[animate]="animate()"
 				[cards]="discardPileCards()"
 				layout="stack"
 				[faceDown]="false"
 				(click)="canDraw() && willTakeDiscardPile()"
-				class="z-2 outline outline-amber-500 grow transition-all"
-				[ngClass]="canDraw() ? 'cursor-pointer hover:ring-2 hover:ring-amber-400' : 'opacity-40 cursor-default'"
+				class="z-2 outline grow transition-all"
+				[ngClass]="canDraw() ? 'outline-green-400 cursor-pointer hover:ring-2 hover:ring-green-400' : 'outline-amber-500 cursor-default'"
+			/>
+			<ui-deck
+				#pot1
+				[animate]="animate()"
+				[cards]="pot1Cards()"
+				layout="stack"
+				[faceDown]="true"
+				class="z-3 outline outline-blue-400 transition-all"
+				[ngClass]="pot1Cards().length ? '' : 'opacity-40'"
+			/>
+			<ui-deck
+				#pot2
+				[animate]="animate()"
+				[cards]="pot2Cards()"
+				layout="stack"
+				[faceDown]="true"
+				class="z-3 outline outline-red-400 transition-all"
+				[ngClass]="pot2Cards().length ? '' : 'opacity-40'"
 			/>
 		</footer>
 
 		<!-- SUD (in basso) -->
 		<div
 			class="w-full outline"
-			[class.outline-green-400]="currentPlayer() === 'south'"
-			[class.outline-amber-500]="currentPlayer() !== 'south'"
+			[class.outline-green-400]="currentPlayer() === PlayerSide.South"
+			[class.outline-amber-500]="currentPlayer() !== PlayerSide.South"
 		>
 			<ui-deck
 				#southDeck
+				[animate]="animate()"
 				layout="horizontal"
 				[cards]="southCards()"
-				[selectable]="currentPlayer() === 'south'"
+				[selectable]="canPlay()"
 				[faceDown]="false"
 				class="z-3 place-content-center"
 			/>

@@ -13,8 +13,8 @@
 		}">
 		@for (item of list(); track item.uid; let i = $index) {
 			<div class="card-pivot relative outline outline-dashed outline-amber-500"
-				[animate.enter]="isVertical ? 'max-h-from-0' : isHorizontal ? 'max-w-from-0' : ''"
-				[animate.leave]="isVertical ? 'max-h-to-0' : isHorizontal ? 'max-w-to-0' : ''"
+				[animate.enter]="animate() ? (isVertical ? 'max-h-from-0' : isHorizontal ? 'max-w-from-0' : '') : ''"
+				[animate.leave]="animate() ? (isVertical ? 'max-h-to-0' : isHorizontal ? 'max-w-to-0' : '') : ''"
 				[ngClass]="{
 					'w-[stretch] max-w-(--max-box-w)': isHorizontal,
 					'h-[stretch] max-h-(--max-box-h)': isVertical,
@@ -26,6 +26,7 @@
 				<ui-card
 					[style.--offset.px]="offset * (item.faceDown ? 1 : -1)"
 					[style.--z]="i"
+					[style.--sel.px]="selectedSet().has(item.uid) ? -8 : 0"
 					(click)="toggleItem(item.uid)"
 					class="rounded-md z-(--z) *:translate-z-[calc(var(--prev-offset,var(--offset)))]"
 					[ngClass]="{
@@ -33,7 +34,7 @@
 						
 					}"
 					[style.--tween-delay]="freezeds()[item.uid]"
-					[attr.tween-id]="item.uid"
+					[attr.tween-id]="animate() ? item.uid : null"
 					[attr.tween-data]="
 						{
 							'--z': i,

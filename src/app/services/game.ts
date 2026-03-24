@@ -1,7 +1,7 @@
 import { Injectable, computed, effect, signal } from '@angular/core';
 import { Subject } from 'rxjs';
 import { LocalStorage } from './local-storage';
-import { Round, RoundPhase, RoundPlayer, RoundSavedState, RoundScore, RoundTeam } from './round';
+import { DealResult, Round, RoundPhase, RoundPlayer, RoundSavedState, RoundScore, RoundTeam } from './round';
 
 // ============================================================
 // TIPI DI STATO E EVENTI
@@ -63,7 +63,7 @@ export type GameEvent =
  *
  * Flusso principale:
  *  1. startGame()                     → avvia la partita e la prima mano
- *  2. drawFromTallone() | takeDiscardPile()  → pesca o raccoglie
+ *  2. drawFromStock() | takeDiscardPile()  → pesca o raccoglie
  *  3. openMeld() / attachToMeld()     → cala o appoggia (0..N volte)
  *  4. discard()                       → scarta e passa il turno
  *     - se il giocatore rimane senza carte → pozzetto automatico
@@ -125,20 +125,20 @@ export class Game {
 	/** Carte in mano a ciascun giocatore { east, west, north, south }. */
 	get hands() { return this.round.hands; }
 
-	/** Il tallone (carte rimanenti da pescare). */
+	/** Lo stock (carte rimanenti da pescare). */
 	get drawPile() { return this.round.drawPile; }
 
 	/** Il monte degli scarti. */
 	get discardPile() { return this.round.discardPile; }
 
 	/** I pozzetti ancora disponibili (1 per squadra, assegnato al primo esaurimento). */
-	get pozzetti() { return this.round.pozzetti; }
+	get pots() { return this.round.pots; }
 
 	/** I giochi calati a terra per ciascuna squadra { ours, opponents }. */
 	get melds() { return this.round.melds; }
 
 	/** Indica se un giocatore specifico ha già preso il suo pozzetto. */
-	get playerHasTakenPozzetto() { return this.round.playerHasTakenPozzetto; }
+	get playerHasTakenPot() { return this.round.playerHasTakenPot; }
 
 	/** Indica se una squadra ha almeno un burraco (≥7 carte) a terra (computed). */
 	get teamHasBurraco() { return this.round.teamHasBurraco; }
@@ -222,22 +222,42 @@ export class Game {
 	}
 
 	/**
-	 * Avvia la partita: distribuisce le carte dal mazzo già presente sul tavolo.
-	 * Corrisponde al pulsante INIZIA nella UI.
+	 * Avvia la partita: imposta la fase e segnala l'inizio.
+	 * Non distribuisce le carte: la Board chiama prepareHand() + commitHand()
+	 * per gestire l'animazione di distribuzione.
 	 */
 	startGame(): void {
 		this.phase.set(GamePhase.Playing);
 		this.gameEvents.next({ type: GameEventType.GameStarted });
-		this.startHand();
 	}
 
 	/**
-	 * Avvia la mano successiva dopo la chiusura di quella corrente.
+	 * Prepara la distribuzione di una nuova mano: incrementa il contatore
+	 * e calcola la distribuzione senza aggiornare i signal del Round.
+	 * La Board usa il DealResult per animare la distribuzione, poi chiama commitHand().
+	 */
+	prepareHand(): DealResult {
+		this.handIndex.update((n) => n + 1);
+		return this.round.prepareDeal();
+	}
+
+	/**
+	 * Imposta i signal del Round dalla distribuzione preparata e segnala l'inizio mano.
+	 * Da chiamare dopo che la Board ha completato l'animazione di distribuzione.
+	 */
+	commitHand(deal: DealResult): void {
+		this.round.commitDeal(deal);
+		this.gameEvents.next({ type: GameEventType.HandStarted, handIndex: this.handIndex() });
+	}
+
+	/**
+	 * Avvia la mano successiva dopo la chiusura (senza animazione).
 	 * Non fa nulla se la partita non è in corso.
 	 */
 	startNextHand(): void {
 		if (this.phase() !== GamePhase.Playing) return;
-		this.startHand();
+		const deal = this.prepareHand();
+		this.commitHand(deal);
 	}
 
 	// ============================================================
@@ -245,12 +265,12 @@ export class Game {
 	// ============================================================
 
 	/**
-	 * Pesca una carta dal tallone.
+	 * Pesca una carta dallo stock.
 	 * Valido solo nella fase draw_or_collect del turno.
 	 * Restituisce false (e imposta lastError) se l'azione non è consentita.
 	 */
-	drawFromTallone(): boolean {
-		return this.round.drawFromTallone();
+	drawFromStock(): boolean {
+		return this.round.drawFromStock();
 	}
 
 	/**
@@ -314,22 +334,8 @@ export class Game {
 	// PRIVATO
 	// ============================================================
 
-	/**
-	 * Incrementa il contatore delle mani e delega a Round la logica di setup:
-	 * mischia il mazzo doppio (108 carte), estrae il dealer, distribuisce
-	 * 11 carte per giocatore, crea i 2 pozzetti da 11 carte e scopre
-	 * la prima carta del monte scarti.
-	 */
-	private startHand(): void {
-		this.handIndex.update((n) => n + 1);
-		this.round.startHand();
-		this.gameEvents.next({
-			type: GameEventType.HandStarted,
-			handIndex: this.handIndex(),
-		});
-	}
-
 	private loadFromStorage(): void {
+		return;
 		const state = this.storage.get<GameSavedState>(Game.STORAGE_KEY);
 		if (!state?.round) return;
 		this.phase.set(state.gamePhase);

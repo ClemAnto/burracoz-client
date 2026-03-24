@@ -1,6 +1,24 @@
-import { AfterViewInit, Component, ElementRef, input, NgZone, OnDestroy, output, signal } from '@angular/core';
+import {
+	AfterViewInit, Component, DestroyRef, effect,
+	ElementRef, inject, input, NgZone, output, signal,
+} from '@angular/core';
 
 const { round } = Math;
+
+// ─── Tipi interni ────────────────────────────────────────────────────────────
+
+interface TweenEntry {
+	/** Posizione sorgente 'x,y' letta al momento della rimozione. */
+	from: string | null;
+	/** JSON dei dati di stile aggiuntivi (tween-data). */
+	data: string | null;
+	/** Elemento di destinazione aggiunto al nuovo deck. */
+	target: HTMLElement | null;
+	/** Safety timeout: pulisce l'entry se il target non arriva mai. */
+	timeoutId: ReturnType<typeof setTimeout> | null;
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 @Component({
 	selector: 'ui-tweener',
@@ -8,213 +26,267 @@ const { round } = Math;
 	templateUrl: './tweener.html',
 	styleUrl: './tweener.scss',
 })
-export class Tweener implements AfterViewInit, OnDestroy {
-	private host = signal<HTMLElement>(null);
-	private mutations: MutationObserver;
-	private resizeObserver: ResizeObserver;
-	private hash: {
-		[key: string]: {
-			from: any;
-			data: any;
-			target: any;
-			timeoutId: any;
-		};
-	} = {};
+export class Tweener implements AfterViewInit {
 
-	disabled = input<boolean>(false);
+	// Injection tramite inject() — nessun costruttore necessario
+	private readonly el    = inject<ElementRef<HTMLElement>>(ElementRef);
+	private readonly zone  = inject(NgZone);
+	private readonly destroyRef = inject(DestroyRef);
 
-	pendings = 0;
+	// ── Input / Output (stesso contratto del vecchio componente) ─────────────
+	disabled      = input<boolean>(false);
+	pendings      = signal(0);
 	tweenComplete = output<any>();
 
-	constructor(protected ref: ElementRef, private zone: NgZone) {}
+	// ── Stato privato ────────────────────────────────────────────────────────
+	private host!: HTMLElement;
+	private mutations!: MutationObserver;
+	private resizeObserver!: ResizeObserver;
 
-	ngAfterViewInit() {
-		const host = this.ref.nativeElement.parentElement;
-		this.host.set(host);
-		this.startTracking();
+	/** Map<tweenId, TweenEntry> — rimpiazza il plain-object hash. */
+	private readonly pending = new Map<string, TweenEntry>();
+
+
+	// ── Lifecycle ────────────────────────────────────────────────────────────
+
+	constructor() {
+		// Quando le animazioni vengono riabilitate, aggiorna le posizioni
+		// memorizzate così il prossimo deal parte da coordinate corrette.
+		effect(() => {
+			if (!this.disabled()) {
+				this.zone.runOutsideAngular(() =>
+					requestAnimationFrame(() => this.silentRefresh()),
+				);
+			}
+		});
 	}
 
-	ngOnDestroy() {
+	ngAfterViewInit(): void {
+		// Il tweener è il figlio diretto dell'host — le carte vivono nel parent.
+		this.host = this.el.nativeElement.parentElement as HTMLElement;
+		this.zone.runOutsideAngular(() => this.setup());
+		this.destroyRef.onDestroy(() => this.teardown());
+	}
+
+	// ── API pubblica ─────────────────────────────────────────────────────────
+
+	/** Annulla lo stato interno senza toccare il DOM. */
+	reset(): void {
+		for (const entry of this.pending.values()) {
+			if (entry.timeoutId !== null) clearTimeout(entry.timeoutId);
+		}
+		this.pending.clear();
+		this.pendings.set(0);
+	}
+
+	/** Aggiorna le posizioni memorizzate senza avviare animazioni. */
+	silentRefresh(): void {
+		const els = Array.from(
+			this.host?.querySelectorAll<HTMLElement>('[tween-id]:not(.tweening)') ?? [],
+		);
+		// Batch reads (1 reflow) poi batch writes
+		const rects = els.map(el => el.getBoundingClientRect());
+		els.forEach((el, i) => el.setAttribute('pos', `${round(rects[i].x)},${round(rects[i].y)}`));
+	}
+
+	// ── Setup / Teardown ─────────────────────────────────────────────────────
+
+	private setup(): void {
+		this.silentRefresh();
+
+		this.mutations = new MutationObserver(mutations => {
+			if (this.disabled()) {
+				// Mantieni le posizioni aggiornate anche a disabled=true
+				// così la prima animazione dopo il re-enable non parte da coords stantie.
+				this.silentRefresh();
+				return;
+			}
+			this.processMutations(mutations);
+			this.animatePositions();
+		});
+		this.mutations.observe(this.host, { childList: true, subtree: true });
+
+		// Resize: shift uniforme del layout → aggiorna pos per tutti
+		this.resizeObserver = new ResizeObserver(() => this.silentRefresh());
+		this.resizeObserver.observe(this.host);
+	}
+
+	private teardown(): void {
 		this.mutations?.disconnect();
 		this.resizeObserver?.disconnect();
 	}
 
-	startTracking() {
-		this.zone.runOutsideAngular(() => {
-		this.silentRefresh();
+	// ── Elaborazione mutazioni ───────────────────────────────────────────────
 
-		this.mutations = new MutationObserver((mutations) => {
-			if (this.disabled()) {
-				// Keep positions current so toggling disabled back on doesn't
-				// cause spurious animations.
-				this.silentRefresh();
-				return;
-			}
-
-			for (const mutation of mutations) {
-				mutation.removedNodes.forEach((node) => {
-					if (node instanceof HTMLElement) {
-						const tweeners = [node].concat(
-							Array.from(node.querySelectorAll('[tween-id]')),
-						);
-						tweeners.forEach((tweener) => {
-							const tweenId = tweener.getAttribute('tween-id');
-							if (!tweenId) return;
-							this.hash[tweenId] = {
-								...this.hash[tweenId],
-								from: tweener.getAttribute('pos'),
-								data: tweener.getAttribute('tween-data'),
-							};
-						});
-					}
-				});
-
-				mutation.addedNodes.forEach((node) => {
-					if (node instanceof HTMLElement) {
-						const tweeners = [node].concat(
-							Array.from(node.querySelectorAll('[tween-id]')),
-						);
-						tweeners.forEach((tweener) => {
-							const tweenId = tweener.getAttribute('tween-id');
-							if (!tweenId) return;
-							this.hash[tweenId] = {
-								...this.hash[tweenId],
-								target: tweener,
-							};
-						});
-					}
-				});
-			}
-
-			this.checkTweens();
-			this.animatePositions();
-		});
-
-		this.mutations.observe(this.host(), { childList: true, subtree: true });
-
-		// When the container resizes (e.g. window resize, layout reflow), all
-		// bounding rects shift uniformly. Reset stored positions so the next
-		// animatePositions call doesn't mistake a layout shift for card movement.
-		this.resizeObserver = new ResizeObserver(() => this.silentRefresh());
-		this.resizeObserver.observe(this.host());
-		});
-	}
-
-	checkTweens() {
-		Object.keys(this.hash).forEach((tweenId) => {
-			const tween = this.hash[tweenId];
-			if (tween.from && tween.target) {
-				clearTimeout(this.hash[tweenId].timeoutId);
-				tween.timeoutId = setTimeout(() => this.clearTween(tweenId), 2000);
-				tween.target.setAttribute('pos', tween.from);
-				tween.target.setAttribute('tween-data-prev', tween.data);
-			}
-		});
-	}
-
-	clearTween(tweenId: string) {
-		if (!(tweenId in this.hash)) return;
-		clearTimeout(this.hash[tweenId].timeoutId);
-		delete this.hash[tweenId];
-	}
-
-	/** Updates stored positions only — does not trigger any animation. */
-	silentRefresh() {
-		this.host()?.querySelectorAll('[tween-id]:not(.tweening)').forEach((node) => {
-			if (node instanceof HTMLElement) {
-				const { x, y } = node.getBoundingClientRect();
-				node.setAttribute('pos', `${round(x)},${round(y)}`);
-			}
-		});
-	}
-
-	/** Compares stored vs current positions and triggers FLIP animations. */
-	animatePositions() {
-		var count = 0;
-		this.host()
-			.querySelectorAll('[tween-id]:not(.tweening):not(.cleaned)')
-			.forEach((node) => {
-				if (node instanceof HTMLElement) {
-					const tweenId = node.getAttribute('tween-id');
-					const { x, y } = node.getBoundingClientRect();
-					const prevPos = node.getAttribute('pos');
-					if (prevPos) {
-						const [ox, oy] = prevPos.split(',');
-						const dx = +ox - x;
-						const dy = +oy - y;
-
-						if (!round(dx) && !round(dy)) return;
-
-						node.classList.add('no-transitions');
-						node.style.translate = `${dx}px ${dy}px`;
-
-						const tweenData = JSON.parse(node.getAttribute('tween-data-prev') || '{}');
-						for (let key in tweenData) {
-							node.style.setProperty(key, tweenData[key]);
-						}
-
-						node.classList.add('tweening');
-						this.clearTween(tweenId);
-
-						onAllTransitionsDone(node, () => {
-							node.classList.remove('tweening');
-							node.removeAttribute('tween-data');
-							node.removeAttribute('tween-data-prev');
-							this.pendings = Math.max(0, this.pendings - 1);
-							this.zone.run(() =>
-								this.tweenComplete.emit({
-									id: tweenId,
-									target: node,
-									pendings: this.pendings,
-								}),
-							);
-						});
-
-						requestAnimationFrame(() => {
-							node.classList.remove('no-transitions');
-							count++;
-							this.pendings++;
-							node.style.translate = '';
-							node.style.setProperty('--tween-scatter-delay', `${count * 10}`);
-							for (let key in tweenData) {
-								node.style.setProperty(key, '');
-							}
-						});
-					} 
-					node.setAttribute('pos', `${round(x)},${round(y)}`);
+	private processMutations(mutations: MutationRecord[]): void {
+		for (const { removedNodes, addedNodes } of mutations) {
+			for (const node of removedNodes) {
+				if (!(node instanceof HTMLElement)) continue;
+				for (const el of tweenables(node)) {
+					const id = el.getAttribute('tween-id')!;
+					const entry = this.pending.get(id) ?? emptyEntry();
+					entry.from = el.getAttribute('pos');
+					entry.data = el.getAttribute('tween-data');
+					this.pending.set(id, entry);
 				}
+			}
+			for (const node of addedNodes) {
+				if (!(node instanceof HTMLElement)) continue;
+				for (const el of tweenables(node)) {
+					const id = el.getAttribute('tween-id')!;
+					const entry = this.pending.get(id) ?? emptyEntry();
+					entry.target = el;
+					this.pending.set(id, entry);
+				}
+			}
+		}
+
+		// Per ogni entry completa (from + target): prime il target con la pos
+		// sorgente e arma il safety timeout.
+		// Questo avviene in sync — prima che il browser faccia layout al nuovo posto —
+		// così animatePositions (chiamata subito dopo) troverà il delta corretto.
+		for (const [id, entry] of this.pending) {
+			if (!entry.from || !entry.target) continue;
+			if (entry.timeoutId !== null) clearTimeout(entry.timeoutId);
+			entry.target.setAttribute('pos', entry.from);
+			if (entry.data) entry.target.setAttribute('tween-data-prev', entry.data);
+			entry.timeoutId = setTimeout(() => this.pending.delete(id), 2000);
+		}
+	}
+
+	// ── Animazione FLIP ──────────────────────────────────────────────────────
+
+	private animatePositions(): void {
+		// ── Fase READ: raccoglie tutti gli elementi da animare (letture in batch) ──
+		interface TweenWork {
+			el: HTMLElement;
+			id: string;
+			dx: number;
+			dy: number;
+			tweenData: Record<string, string>;
+			scatter: number;
+		}
+		const work: TweenWork[] = [];
+		let scatter = 0;
+
+		this.host.querySelectorAll<HTMLElement>('[tween-id]:not(.tweening)')
+			.forEach(el => {
+				const { x, y } = el.getBoundingClientRect();
+				const stored   = el.getAttribute('pos');
+
+				// Aggiorna sempre pos con la posizione attuale
+				el.setAttribute('pos', `${round(x)},${round(y)}`);
+
+				if (!stored) return;
+				if (!stored) return;
+				const dx = +stored.split(',')[0] - x;
+				const dy = +stored.split(',')[1] - y;
+				if (!round(dx) && !round(dy)) return;
+
+				work.push({
+					el,
+					id:       el.getAttribute('tween-id')!,
+					dx, dy,
+					tweenData: JSON.parse(el.getAttribute('tween-data-prev') ?? '{}'),
+					scatter:  scatter++,
+				});
 			});
+
+		if (!work.length) return;
+
+		// ── Fase WRITE-1: snap alla posizione sorgente senza transizioni (scritture in batch) ──
+		for (const { el, dx, dy, tweenData, id } of work) {
+			el.classList.add('no-transitions', 'tweening');
+			el.style.translate = `${dx}px ${dy}px`;
+			for (const key in tweenData) el.style.setProperty(key, tweenData[key]);
+			this.pending.delete(id);
+		}
+
+		// ── Forced reflow: un singolo getBoundingClientRect "committa" lo stato
+		//    intermedio prima che le transizioni partano. Sostituisce il RAF
+		//    (nessun frame di ritardo, nessun flash alla posizione finale). ──
+		work[0].el.getBoundingClientRect();
+
+		// ── Fase WRITE-2: avvia le transizioni (scritture in batch) ──
+		for (const { el, id, tweenData, scatter: idx } of work) {
+			el.classList.remove('no-transitions');
+			el.style.translate = '';
+			el.style.setProperty('--tween-scatter-delay', String(idx * 10));
+			for (const key in tweenData) el.style.removeProperty(key);
+
+			this.pendings.update(v => v + 1);
+
+			// Il fallback garantisce che pendings torni a 0 anche se
+			// la transizione non parte (translate già 0, property non inclusa, ecc.)
+			onTransitionsDone(el, () => {
+				el.classList.remove('tweening');
+				// silentRefresh aggiorna pos di TUTTI gli elementi stabili (incluso questo
+				// e i vicini che si sono spostati per il reflow) in un unico batch sincrono,
+				// prima che il microtask del MutationObserver scatti → animatePositions
+				// troverà dx=0 per tutti e non partirà nessuna animazione fantasma.
+				this.silentRefresh();
+				el.removeAttribute('tween-data-prev');
+				this.zone.run(() => {
+					this.pendings.update(v => Math.max(0, v - 1));
+					this.tweenComplete.emit({ id, target: el, pendings: this.pendings() });
+				});
+			});
+		}
 	}
 }
 
-function onAllTransitionsDone(el: HTMLElement, callback: () => void) {
-	let pending = 0;
-	let running = false;
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-	const cleanup = () => {
-		//el.classList.add("cleaned");
-		el.removeEventListener('transitionstart', onStart);
-		el.removeEventListener('transitionend', onFinish);
+function emptyEntry(): TweenEntry {
+	return { from: null, data: null, target: null, timeoutId: null };
+}
+
+/** Restituisce l'elemento stesso + tutti i suoi discendenti con tween-id. */
+function tweenables(root: HTMLElement): HTMLElement[] {
+	const self = root.hasAttribute('tween-id') ? [root] : [];
+	return (self as HTMLElement[]).concat(
+		Array.from(root.querySelectorAll<HTMLElement>('[tween-id]')),
+	);
+}
+
+/**
+ * Chiama `callback` una volta sola quando tutte le transizioni CSS sull'elemento
+ * sono terminate (transitionend) o cancellate (transitioncancel).
+ *
+ * `fallbackMs` è un timeout di sicurezza per i casi in cui nessuna transizione
+ * parte (translate già a 0, transition-property non include translate, ecc.).
+ */
+function onTransitionsDone(
+	el: HTMLElement,
+	callback: () => void,
+	fallbackMs = 1500,
+): void {
+	let pending  = 0;
+	let started  = false;
+	let fallback = setTimeout(fire, fallbackMs);
+
+	function fire(): void {
+		clearTimeout(fallback);
+		el.removeEventListener('transitionstart',  onStart);
+		el.removeEventListener('transitionend',    onFinish);
 		el.removeEventListener('transitioncancel', onFinish);
-	};
+		callback();
+	}
 
-	const onStart = (e: TransitionEvent) => {
+	function onStart(e: TransitionEvent): void {
 		if (e.target !== el) return;
-		running = true;
+		clearTimeout(fallback);   // la transizione è partita, il fallback non serve più
+		started = true;
 		pending++;
-	};
+	}
 
-	const onFinish = (e: TransitionEvent) => {
+	function onFinish(e: TransitionEvent): void {
 		if (e.target !== el) return;
 		if (pending > 0) pending--;
-		if (running && pending === 0) {
-			cleanup();
-			callback();
-		}
-	};
+		if (started && pending === 0) fire();
+	}
 
-	el.addEventListener('transitionstart', onStart);
-	el.addEventListener('transitionend', onFinish);
+	el.addEventListener('transitionstart',  onStart);
+	el.addEventListener('transitionend',    onFinish);
 	el.addEventListener('transitioncancel', onFinish);
-	el.classList.remove("cleaned");
 }

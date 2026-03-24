@@ -2,9 +2,10 @@ import { NgClass, UpperCasePipe } from '@angular/common';
 import { AfterViewInit, Component, computed, inject, signal, ViewChild } from '@angular/core';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { Game } from '../../services/game';
-import { RoundPhase, RoundPlayer, RoundTurnStep } from '../../services/round';
+import { DealResult, PlayerSide, RoundPhase, RoundPlayer, RoundTurnStep } from '../../services/round';
 import { Deck } from '../deck/deck';
 import { Tweener } from '../tweener/tweener';
+import { firstValueFrom, Subject } from 'rxjs';
 
 @Component({
 	selector: 'ui-board',
@@ -15,8 +16,11 @@ import { Tweener } from '../tweener/tweener';
 	},
 })
 export class Board implements AfterViewInit {
+	@ViewChild('tweener')     tweener:     Tweener;
 	@ViewChild('drawPile')    drawPile:    Deck;
 	@ViewChild('discardPile') discardPile: Deck;
+	@ViewChild('pot1')   pot1:   Deck;
+	@ViewChild('pot2')   pot2:   Deck;
 	@ViewChild('northDeck')   northDeck:      Deck;
 	@ViewChild('southDeck')   southDeck:      Deck;
 	@ViewChild('eastDeck')    eastDeck:       Deck;
@@ -26,11 +30,14 @@ export class Board implements AfterViewInit {
 
 	readonly RoundPhase = RoundPhase;
 	readonly RoundTurnStep = RoundTurnStep;
+	readonly PlayerSide = PlayerSide;
 
 	// Modalità debug: tutte le mani scoperte (true = carte visibili per tutti)
 	debug = signal(true);
+	playAsEveryone = computed(() => this.debug());
 
 	animate = signal(true);
+	private resetGen = 0;
 	
 	currentPlayer = this.game.currentPlayer;
 	eastCards = computed(()=>this.game.hands().east);
@@ -39,40 +46,82 @@ export class Board implements AfterViewInit {
 	southCards = computed(()=>this.game.hands().south);
 	drawPileCards = this.game.drawPile;
 	discardPileCards = this.game.discardPile;
+	pot1Cards = computed(() => this.game.pots()[0] ?? []);
+	pot2Cards = computed(() => this.game.pots()[1] ?? []);
 	turnStep = this.game.turnStep;
 	totalScore = this.game.totalScore;
 
 	winnerPlayer = this.game.winnerPlayer;
 	handScore = this.game.handScore;
 
-	ourZoneActive = computed(()=>false);
-	theirZoneActive = computed(()=>false);
+	ourZoneActive = computed(() =>
+		this.canPlay() &&
+		(this.currentPlayer() === PlayerSide.North || this.currentPlayer() === PlayerSide.South)
+	);
+	theirZoneActive = computed(() =>
+		this.canPlay() &&
+		(this.currentPlayer() === PlayerSide.East || this.currentPlayer() === PlayerSide.West)
+	);
 
-	ourMeldsData = computed<any[]>(()=>[]);
-	theirMeldsData = computed<any[]>(()=>[]);
+	ourMeldsData   = computed(() => this.game.melds().ours);
+	theirMeldsData = computed(() => this.game.melds().opponents);
 
 
-	canDraw = computed(()=>false);
-	canPlay = computed(()=>false);
+	canDraw = computed(() =>
+		this.roundPhase() === RoundPhase.InProgress &&
+		this.turnStep() === RoundTurnStep.DrawOrCollect &&
+		(this.playAsEveryone() || this.currentPlayer() === PlayerSide.South)
+	);
+
+	canPlay = computed(() =>
+		this.roundPhase() === RoundPhase.InProgress &&
+		this.turnStep() === RoundTurnStep.PlayAndDiscard &&
+		(this.playAsEveryone() || this.currentPlayer() === PlayerSide.South)
+	);
+
 	canUndo = computed(()=>false);
-	isHandClosed = computed(()=>false);
+	isHandClosed = computed(() => this.roundPhase() === RoundPhase.Closed);
 
 	roundPhase = this.game.roundPhase;
 
 	lastError = signal<string>(null);
 
-	onTweenComplete() {}
+	tweenCompleted = new Subject<void>();
+	private dealAbort: AbortController | null = null;
 
-	attachToMeld(meldIndex:number) {
+	onTweenComplete() {
+		this.tweenCompleted.next();
+	}
 
+	attachToMeld(meldIndex: number) {
+		const deck = this.playerDecks[this.currentPlayer()];
+		if (!deck) return;
+		const tags = deck.selecteds().map(c => c.tag);
+		if (!tags.length) return;
+		this.game.attachToMeld(meldIndex, tags);
+		deck.selecteds.set([]);
 	}
 
 	addMeld() {
-
+		const deck = this.playerDecks[this.currentPlayer()];
+		if (!deck) return;
+		const tags = deck.selecteds().map(c => c.tag);
+		if (!tags.length) return;
+		this.game.openMeld(tags);
+		deck.selecteds.set([]);
 	}
 
-	willTakeFromDrawPile(){
+	async willTakeFromDrawPile() {
+		const pile = this.game.drawPile();
+		if (!pile.length) return;
+		const card = pile.at(-1);
+		const player = this.currentPlayer();
 
+		this.drawPile.removeItems([card]);
+		this.playerDecks[player]?.put([card]);
+
+		await firstValueFrom(this.tweenCompleted);
+		this.game.drawFromStock();
 	}
 
 	willTakeDiscardPile() {
@@ -83,57 +132,107 @@ export class Board implements AfterViewInit {
 
 	ngAfterViewInit() {
 		this.playerDecks = {
-			north: this.northDeck,
-			east:  this.eastDeck,
-			south: this.southDeck,
-			west:  this.westDeck,
+			[PlayerSide.North]: this.northDeck,
+			[PlayerSide.East]:  this.eastDeck,
+			[PlayerSide.South]: this.southDeck,
+			[PlayerSide.West]:  this.westDeck,
 		};
 	}
 
-	async dealAnimation() {
-		const order: RoundPlayer[] = ['north', 'east', 'south', 'west'];
+	/**
+	 * Anima la distribuzione delle carte usando le istanze DeckItem già calcolate
+	 * da game.prepareHand(). Al termine, i Deck component hanno le stesse istanze
+	 * che commitHand() scriverà nei signal → nessun salto visivo.
+	 */
+	private async deal(result: DealResult, signal: AbortSignal): Promise<void> {
+		const check = () => { if (signal.aborted) throw new DOMException('aborted', 'AbortError'); };
+		const dealOrder: RoundPlayer[] = this.buildDealOrder(result.firstPlayer);
 
-		for (const player of order) {
-			const cards = this.drawPile.take(11);
-			this.playerDecks[player].put(cards);
-			await sleep(100);
+		// 11 giri × 4 giocatori, una carta per volta
+		for (let i = 0; i < 11; i++) {
+			for (const player of dealOrder) {
+				const card = result.hands[player][i];
+				if (!card) continue;
+				this.drawPile.removeItems([card]);
+				this.playerDecks[player].put([card]);
+				await sleep(10); check();
+			}
 		}
 
-		await sleep(5000);
+		await firstValueFrom(this.tweenCompleted); check();
+		await sleep(500); check();
 
-		for (const player of order) {
-			const cards = this.playerDecks[player].takeAll();
-			this.drawPile.put(cards);
-			await sleep(100);
+		// Pozzetti
+		for (let i = 0; i < 2; i++) {
+			const cards = result.pots[i];
+			this.drawPile.removeItems(cards);
+			[this.pot1, this.pot2][i].put(cards);
+			await sleep(500); check();
 		}
+
+		await firstValueFrom(this.tweenCompleted); check();
+
+		// Prima carta degli scarti
+		if (result.discard) {
+			this.drawPile.removeItems([result.discard]);
+			this.discardPile.put([result.discard]);
+		}
+	}
+
+	private buildDealOrder(firstPlayer: RoundPlayer): RoundPlayer[] {
+		const ORDER: PlayerSide[] = [PlayerSide.North, PlayerSide.East, PlayerSide.South, PlayerSide.West];
+		const start = ORDER.indexOf(firstPlayer);
+		return [...ORDER.slice(start), ...ORDER.slice(0, start)];
 	}
 
 	async startGame() {
-		await this.dealAnimation();
-		return
-		
-		this.animate.set(false);
+		this.dealAbort?.abort();
+		this.dealAbort = new AbortController();
 		this.game.startGame();
-		await sleep(50);
-		this.animate.set(true);
+		const deal = this.game.prepareHand();
+		try {
+			await this.deal(deal, this.dealAbort.signal);
+			this.game.commitHand(deal);
+		} catch (e: any) {
+			if (e?.name !== 'AbortError') throw e;
+		}
 	}
 
 	async resetGame() {
-		this.animate.set(true);
+		const gen = ++this.resetGen;
+		this.dealAbort?.abort();
+		this.tweenCompleted.next();
+		this.animate.set(false);
+		this.tweener?.reset();
+		await sleep(0); // attende che Angular processi animate=false (e azzeri le leave animations) prima di cambiare i segnali delle carte
+		if (gen !== this.resetGen) return;
 		await this.game.resetGame();
-		this.animate.set(true);
+		if (gen === this.resetGen) this.animate.set(true);
 	}
 
 	undoTurn() {
 
 	}
 
-	discard() {
+	async discard() {
+		const player = this.currentPlayer();
+		const deck = this.playerDecks[player];
+		if (!deck) return;
+		const [card] = deck.selecteds();
+		if (!card) return;
 
+		deck.removeItems([card]);
+		card.faceDown = false;
+		this.discardPile.put([card]);
+
+		await firstValueFrom(this.tweenCompleted);
+		this.game.discard(card.tag);
 	}
 
-	nextHand() {
-
+	async nextHand() {
+		const deal = this.game.prepareHand();
+		await this.deal(deal, new AbortController().signal);
+		this.game.commitHand(deal);
 	}
 
 }

@@ -4,8 +4,11 @@
 		// la proprietà CSS `translate`, che è riservata al Tweener FLIP.
 		// Usa left/top + calc con le variabili del Deck padre.
 		position: absolute;
-		left: calc(50% - var(--box-w) / 2);
-		top: calc(50% - var(--box-h) / 2);
+		left: calc((var(--max-box-w) - var(--box-w)) / 2 - var(--sel, 0px) * sin(var(--rotate, 0deg)));
+		top: calc((var(--max-box-h) - var(--box-h)) / 2 + var(--sel, 0px) * cos(var(--rotate, 0deg)));
+		&:not(.tweening) {
+			transition: top 0.2s ease, left 0.2s ease;
+		}
 
 		// Rotazione Z della singola carta, guidata da --rotate del Deck padre.
 		// Compone con il rotateY del flip fronte/retro senza conflitti
@@ -15,6 +18,16 @@
 		::ng-deep {
 			> * {
 				transition: all 1s;
+			}
+		}
+	}
+}
+
+:host(.no-animate) {
+	ui-card {
+		::ng-deep {
+			> * {
+				transition: none;
 			}
 		}
 	}
