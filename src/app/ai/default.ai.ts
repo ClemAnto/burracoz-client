@@ -73,6 +73,12 @@ export class DefaultAi implements AiPlayer {
 
 	decideDraw(view: GameView): AiDecision<DrawChoice> {
 		const pile = view.discardPile;
+		// Tallone esaurito: l'unica fonte è il monte scarti (se non vuoto).
+		if (view.drawPileCount === 0) {
+			return pile.length
+				? { value: 'discard', reason: 'Tallone esaurito: raccolgo il monte scarti.' }
+				: { value: 'stock', reason: 'Tallone e monte vuoti: nessuna pesca possibile.' };
+		}
 		if (!pile.length) {
 			return { value: 'stock', reason: 'Monte scarti vuoto: pesco dal tallone.' };
 		}

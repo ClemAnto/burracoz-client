@@ -65,10 +65,11 @@ export class Board implements AfterViewInit {
 
 	/**
 	 * Configurazione dei posti: null = umano, altrimenti l'IA che lo gioca.
-	 * Numero di IA arbitrario 0..4. Default: solo SUD umano, gli altri tre IA.
+	 * Numero di IA arbitrario 0..4. Config attuale: 4 IA (demo autonoma).
+	 * Per giocare come umano: `[PlayerSide.South]: null`.
 	 */
 	seats: Record<PlayerSide, AiPlayer | null> = {
-		[PlayerSide.South]: null,
+		[PlayerSide.South]: createAi('bot'),
 		[PlayerSide.North]: createAi('maria'),
 		[PlayerSide.East]: createAi('sergio'),
 		[PlayerSide.West]: createAi('maria'),
@@ -82,8 +83,8 @@ export class Board implements AfterViewInit {
 
 	private viewReady = false;
 	private aiScheduled = false;
-	private readonly AI_TURN_DELAY = 700;
-	private readonly AI_ACTION_DELAY = 450;
+	private readonly AI_TURN_DELAY = 350;
+	private readonly AI_ACTION_DELAY = 180;
 
 	// Modalità debug: tutte le mani scoperte (true = carte visibili per tutti)
 	debug = signal(true);
@@ -420,10 +421,22 @@ export class Board implements AfterViewInit {
 			// PESCA
 			const draw = ai.decideDraw(this.buildView(player));
 			this.logAi(player, draw.reason);
-			if (draw.value === 'discard' && this.game.discardPile().length > 0) {
-				this.game.takeDiscardPile();
-			} else {
-				this.game.drawFromStock();
+			const wantsPile = draw.value === 'discard' && this.game.discardPile().length > 0;
+			let drew = wantsPile ? this.game.takeDiscardPile() : this.game.drawFromStock();
+			if (!drew) {
+				// Fallback sull'altra fonte se la preferita non è disponibile.
+				drew = this.game.discardPile().length
+					? this.game.takeDiscardPile()
+					: this.game.drawFromStock();
+			}
+			if (!drew) {
+				// Tallone e monte vuoti: turno impossibile. Sospende il bot senza
+				// rischedulare (niente busy-loop). Fine tallone da gestire a parte.
+				this.logAi(
+					player,
+					'Nessuna pesca possibile: turno bot sospeso (tallone esaurito).',
+				);
+				return;
 			}
 			await this.tweener.whenIdle();
 			this.playerDecks[player]?.autosortNow();

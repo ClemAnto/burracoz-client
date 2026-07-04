@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 
 import { DeckItem } from './cards';
 import {
+	PlayerSide,
 	Round,
 	RoundEventType,
 	RoundGameplayEvent,
@@ -215,5 +216,93 @@ describe('Round – eventi di gioco fini', () => {
 		const take = events.find((e) => e.type === RoundEventType.TakeDiscard);
 		expect(take).toBeTruthy();
 		expect(take!.cards?.length).toBe(pileSize);
+	});
+});
+
+/**
+ * Dinamiche di presa del pozzetto (per squadra) e chiusura della mano.
+ */
+describe('Round – pozzetto e chiusura', () => {
+	let round: Round;
+
+	beforeEach(async () => {
+		TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] });
+		round = TestBed.inject(Round);
+		await round.prepareDeck();
+	});
+
+	const partnerOf = (player: RoundPlayer): RoundPlayer =>
+		[PlayerSide.North, PlayerSide.East, PlayerSide.South, PlayerSide.West].find(
+			(p) => p !== player && TEAM_BY_PLAYER[p] === TEAM_BY_PLAYER[player],
+		)!;
+
+	// Un set valido di 3 carte (stesso valore, semi diversi).
+	const validSet = () => [new DeckItem('7♥️'), new DeckItem('7♦️'), new DeckItem('7♠️')];
+
+	// 7 carte qualsiasi: teamHasBurraco guarda solo la lunghezza (≥7).
+	const makeBurraco = () =>
+		['4♠️', '5♠️', '6♠️', '7♠️', '8♠️', '9♠️', '10♠️'].map((t) => new DeckItem(t));
+
+	it('svuotando la mano con una calata prende il pozzetto della squadra', () => {
+		round.startHand();
+		const player = round.currentPlayer()!;
+		round.drawFromStock();
+		const potIndex = TEAM_BY_PLAYER[player] === 'ours' ? 0 : 1;
+		const potSize = round.pots()[potIndex].length;
+		expect(potSize).toBeGreaterThan(0);
+
+		round.hands.update((h) => ({ ...h, [player]: validSet() }));
+		expect(round.openMeld(round.hands()[player].slice())).toBeTrue();
+
+		expect(round.playerHasTakenPot()[player]).toBeTrue();
+		expect(round.hands()[player].length).toBe(potSize); // ha ripreso il pozzetto in mano
+		expect(round.pots()[potIndex].length).toBe(0);
+	});
+
+	it('il pozzetto è PER SQUADRA: il compagno non ne prende un secondo', () => {
+		round.startHand();
+		const player = round.currentPlayer()!;
+		round.drawFromStock();
+		const potIndex = TEAM_BY_PLAYER[player] === 'ours' ? 0 : 1;
+		// il compagno ha già preso il pozzetto della squadra
+		round.playerHasTakenPot.update((m) => ({ ...m, [partnerOf(player)]: true }));
+
+		round.hands.update((h) => ({ ...h, [player]: validSet() }));
+		expect(round.openMeld(round.hands()[player].slice())).toBeTrue();
+
+		expect(round.hands()[player].length).toBe(0); // resta senza carte
+		expect(round.playerHasTakenPot()[player]).toBeFalse(); // non lo prende lui
+		expect(round.pots()[potIndex].length).toBeGreaterThan(0); // il pozzetto è ancora lì
+	});
+
+	it('non si chiude senza burraco, anche con pozzetto preso', () => {
+		round.startHand();
+		const player = round.currentPlayer()!;
+		round.drawFromStock();
+		round.playerHasTakenPot.update((m) => ({ ...m, [player]: true }));
+		round.hands.update((h) => ({ ...h, [player]: [new DeckItem('7♦️')] }));
+
+		expect(round.discard(round.hands()[player][0])).toBeTrue();
+		expect(round.phase()).toBe(RoundPhase.InProgress);
+	});
+
+	it('chiude e calcola il punteggio: pozzetto preso + burraco + scarto finale', () => {
+		round.startHand();
+		const player = round.currentPlayer()!;
+		round.drawFromStock();
+		const team = TEAM_BY_PLAYER[player];
+		round.playerHasTakenPot.update((m) => ({ ...m, [player]: true }));
+		round.melds.update((m) => ({ ...m, [team]: [makeBurraco()] }));
+		round.hands.update((h) => ({ ...h, [player]: [new DeckItem('K♦️')] }));
+
+		const closeEvents: RoundEventType[] = [];
+		round.gameplayEvents.subscribe((e) => closeEvents.push(e.type));
+
+		expect(round.discard(round.hands()[player][0])).toBeTrue();
+		expect(round.phase()).toBe(RoundPhase.Closed);
+		expect(round.winnerPlayer()).toBe(player);
+		expect(round.score()).not.toBeNull();
+		expect(round.score()![team].breakdown.closureBonus).toBe(100);
+		expect(closeEvents).toContain(RoundEventType.Close);
 	});
 });
