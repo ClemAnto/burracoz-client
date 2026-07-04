@@ -18,15 +18,15 @@ const SERGIO_PROFILE: AiProfile = {
 };
 
 const SERGIO_PHRASES: PhraseBank = {
-	'partner:good': ['Ecco, bravo!', 'Così si ragiona, compagno!'],
-	'partner:bad': ['Ma che combini?!', 'Dai su, svegliati.'],
-	'opponent:good': ['Mah, fortuna.', 'Non durerà.'],
-	'opponent:bad': ['Eh eh, continua così.', 'Grazie del regalo!'],
-	'opponent:lucky': ['Ma che culo!', 'Sei nato con la camicia, eh.'],
-	'self:good': ['Troppo facile.', 'Guardate e imparate.'],
-	'self:bad': ['Vabbè, ci sta.'],
-	'banter:greeting': ['Si gioca! Preparatevi a perdere.'],
-	'banter:rival': ['Di nuovo tu? Stavolta ti asfalto.', 'Pronto a perdere anche oggi?'],
+	'partner:good': ['Ecco, bravo! 👏', 'Così si ragiona, compagno! 💪'],
+	'partner:bad': ['Ma che combini?! 🤦', 'Dai su, svegliati. 😠'],
+	'opponent:good': ['Mah, fortuna. 🙄', 'Non durerà. 😏'],
+	'opponent:bad': ['Eh eh, continua così. 😈', 'Grazie del regalo! 🎁'],
+	'opponent:lucky': ['Ma che culo! 😤', 'Sei nato con la camicia, eh. 🍀😒'],
+	'self:good': ['Troppo facile. 😎', 'Guardate e imparate. 🔥'],
+	'self:bad': ['Vabbè, ci sta. 😤'],
+	'banter:greeting': ['Si gioca! Preparatevi a perdere. 😈'],
+	'banter:rival': ['Di nuovo tu? Stavolta ti asfalto. 😤', 'Pronto a perdere anche oggi? 😏'],
 };
 
 export class SergioAi extends DefaultAi {

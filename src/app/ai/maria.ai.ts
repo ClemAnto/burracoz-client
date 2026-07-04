@@ -18,14 +18,17 @@ const MARIA_PROFILE: AiProfile = {
 };
 
 const MARIA_PHRASES: PhraseBank = {
-	'partner:good': ['Benissimo, compagno!', 'Perfetto, continuiamo così.'],
-	'partner:bad': ['Tranquillo, capita.', 'Nessun problema, rimediamo.'],
-	'opponent:good': ['Brava/o davvero.', 'Bel gioco.'],
-	'opponent:lucky': ['Che fortunello!', 'Beato te.'],
-	'self:good': ['Oh, bene così.'],
-	'self:bad': ['Che sbadata, scusate.'],
-	'banter:greeting': ['Buona partita a tutti!'],
-	'banter:rival': ['Con te faccio sempre fatica...', 'Vediamo se stavolta riesco a batterti.'],
+	'partner:good': ['Benissimo, compagno! 😊', 'Perfetto, continuiamo così. 👏'],
+	'partner:bad': ['Tranquillo, capita. 🤗', 'Nessun problema, rimediamo. 🙂'],
+	'opponent:good': ['Brava/o davvero. 👏', 'Bel gioco. 😊'],
+	'opponent:lucky': ['Che fortunello! 🍀', 'Beato te. 😄'],
+	'self:good': ['Oh, bene così. 😌'],
+	'self:bad': ['Che sbadata, scusate. 😅'],
+	'banter:greeting': ['Buona partita a tutti! 😊'],
+	'banter:rival': [
+		'Con te faccio sempre fatica... 😅',
+		'Vediamo se stavolta riesco a batterti. 🙂',
+	],
 };
 
 export class MariaAi extends DefaultAi {

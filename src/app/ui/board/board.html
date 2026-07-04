@@ -153,8 +153,15 @@
 			<option [value]="opt.value" class="text-black">{{ opt.label }}</option>
 		}
 	</select>
-	@if (stepPending()) {
-		<button nz-button nzSize="small" nzType="primary" nzDanger (click)="advanceStep()">
+	@if (aiSpeed() === 'manual') {
+		<button
+			nz-button
+			nzSize="small"
+			nzType="primary"
+			nzDanger
+			[disabled]="!stepPending()"
+			(click)="advanceStep()"
+		>
 			AVANTI ▶
 		</button>
 	}
@@ -169,7 +176,7 @@
   Il contorno verde evidenzia il giocatore di turno
 ============================================================ -->
 <div
-	class="flex flex-col gap-2 p-2 max-w-full outline outline-blue-600 grow overflow-hidden isolate"
+	class="flex flex-col gap-3 p-2 max-w-full grow overflow-hidden isolate"
 	uiTweenScope
 	#tweener="uiTweenScope"
 	[disabled]="!animate()"
@@ -177,7 +184,7 @@
 >
 	<!-- NORD (in alto) -->
 	<header
-		class="w-full relative shrink-0 rounded-lg outline transition-all duration-300"
+		class="flex w-full shrink-0 items-center gap-2 rounded-lg px-1 outline transition-all duration-300"
 		[ngClass]="
 			currentPlayer() === PlayerSide.North
 				? 'outline-2 outline-green-400 bg-green-400/10 shadow-[0_0_16px_2px_rgba(74,222,128,0.55)]'
@@ -185,7 +192,7 @@
 		"
 	>
 		<span
-			class="absolute top-1 left-1 z-10 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider pointer-events-none select-none transition-colors duration-300"
+			class="z-10 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider select-none transition-colors duration-300"
 			[ngClass]="
 				currentPlayer() === PlayerSide.North
 					? 'bg-green-500 text-white animate-pulse'
@@ -201,18 +208,18 @@
 			[selectable]="
 				currentPlayer() === PlayerSide.North && turnStep() === RoundTurnStep.PlayAndDiscard
 			"
-			class="z-3 place-content-center"
+			class="z-3 grow place-content-center"
 		/>
 	</header>
 
 	<!-- MELDS: Est | Giochi NORD+SUD | Giochi EST+OVEST | Ovest -->
 	<section
-		class="grid min-h-0 grow grid-cols-[26px_1fr_1fr_26px] gap-1 sm:grid-cols-[40px_1fr_1fr_40px] sm:gap-2"
+		class="grid min-h-0 grow grid-cols-[26px_1fr_1fr_26px] gap-2 sm:grid-cols-[44px_1fr_1fr_44px] sm:gap-4"
 	>
 		<!-- EST (colonna sinistra) -->
 		<div
 			id="east-col"
-			class="flex relative rounded-lg outline transition-all duration-300"
+			class="flex flex-col rounded-lg outline transition-all duration-300"
 			[ngClass]="
 				currentPlayer() === PlayerSide.East
 					? 'outline-2 outline-green-400 bg-green-400/10 shadow-[0_0_16px_2px_rgba(74,222,128,0.55)]'
@@ -220,7 +227,7 @@
 			"
 		>
 			<span
-				class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 rounded-full px-0.5 py-2 text-[10px] font-bold tracking-wider pointer-events-none select-none transition-colors duration-300 [writing-mode:vertical-rl]"
+				class="z-10 shrink-0 rounded py-0.5 text-center text-[9px] font-bold tracking-wider select-none transition-colors duration-300"
 				[ngClass]="
 					currentPlayer() === PlayerSide.East
 						? 'bg-green-500 text-white animate-pulse'
@@ -228,20 +235,22 @@
 				"
 				>EST</span
 			>
-			<ui-deck
-				#eastDeck
-				[animate]="animate()"
-				class="absolute h-full w-full place-content-center"
-				layout="vertical"
-				[gap]="-10"
-				[rotate]="90"
-				[cards]="eastCards()"
-				[faceDown]="debug() ? false : true"
-				[selectable]="
-					currentPlayer() === PlayerSide.East &&
-					turnStep() === RoundTurnStep.PlayAndDiscard
-				"
-			/>
+			<div class="relative grow">
+				<ui-deck
+					#eastDeck
+					[animate]="animate()"
+					class="absolute h-full w-full place-content-center"
+					layout="vertical"
+					[gap]="-10"
+					[rotate]="90"
+					[cards]="eastCards()"
+					[faceDown]="debug() ? false : true"
+					[selectable]="
+						currentPlayer() === PlayerSide.East &&
+						turnStep() === RoundTurnStep.PlayAndDiscard
+					"
+				/>
+			</div>
 		</div>
 
 		<!-- Giochi della squadra NORD+SUD (ourMelds).
@@ -307,7 +316,7 @@
 		<!-- OVEST (colonna destra) -->
 		<div
 			id="weast-col"
-			class="flex relative rounded-lg outline transition-all duration-300"
+			class="flex flex-col rounded-lg outline transition-all duration-300"
 			[ngClass]="
 				currentPlayer() === PlayerSide.West
 					? 'outline-2 outline-green-400 bg-green-400/10 shadow-[0_0_16px_2px_rgba(74,222,128,0.55)]'
@@ -315,7 +324,7 @@
 			"
 		>
 			<span
-				class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 rounded-full px-0.5 py-2 text-[10px] font-bold tracking-wider pointer-events-none select-none transition-colors duration-300 [writing-mode:vertical-rl]"
+				class="z-10 shrink-0 rounded py-0.5 text-center text-[8px] font-bold tracking-tight select-none transition-colors duration-300"
 				[ngClass]="
 					currentPlayer() === PlayerSide.West
 						? 'bg-green-500 text-white animate-pulse'
@@ -323,20 +332,22 @@
 				"
 				>OVEST</span
 			>
-			<ui-deck
-				#westDeck
-				[animate]="animate()"
-				class="absolute h-full w-full place-content-center"
-				layout="vertical"
-				[gap]="-10"
-				[rotate]="90"
-				[cards]="westCards()"
-				[faceDown]="debug() ? false : true"
-				[selectable]="
-					currentPlayer() === PlayerSide.West &&
-					turnStep() === RoundTurnStep.PlayAndDiscard
-				"
-			/>
+			<div class="relative grow">
+				<ui-deck
+					#westDeck
+					[animate]="animate()"
+					class="absolute h-full w-full place-content-center"
+					layout="vertical"
+					[gap]="-10"
+					[rotate]="90"
+					[cards]="westCards()"
+					[faceDown]="debug() ? false : true"
+					[selectable]="
+						currentPlayer() === PlayerSide.West &&
+						turnStep() === RoundTurnStep.PlayAndDiscard
+					"
+				/>
+			</div>
 		</div>
 	</section>
 
@@ -392,7 +403,7 @@
 
 	<!-- SUD (in basso) -->
 	<div
-		class="w-full relative shrink-0 rounded-lg outline transition-all duration-300"
+		class="flex w-full shrink-0 items-center gap-2 rounded-lg px-1 outline transition-all duration-300"
 		[ngClass]="
 			currentPlayer() === PlayerSide.South
 				? 'outline-2 outline-green-400 bg-green-400/10 shadow-[0_0_16px_2px_rgba(74,222,128,0.55)]'
@@ -400,7 +411,7 @@
 		"
 	>
 		<span
-			class="absolute top-1 left-1 z-10 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider pointer-events-none select-none transition-colors duration-300"
+			class="z-10 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider select-none transition-colors duration-300"
 			[ngClass]="
 				currentPlayer() === PlayerSide.South
 					? 'bg-green-500 text-white animate-pulse'
@@ -415,7 +426,7 @@
 			[cards]="southCards()"
 			[selectable]="canPlay()"
 			[faceDown]="false"
-			class="z-3 place-content-center"
+			class="z-3 grow place-content-center"
 		/>
 	</div>
 

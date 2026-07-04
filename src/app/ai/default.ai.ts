@@ -505,14 +505,14 @@ function playedCards(plays: AiPlay[]): number {
 
 /** Repertorio di battute di base (italiano: sono testi a schermo, non identificatori). */
 const DEFAULT_PHRASES: PhraseBank = {
-	'partner:good': ['Bravo!', 'Bella giocata, compagno.'],
-	'partner:lucky': ['Che fortuna, compagno!'],
-	'partner:bad': ['Ahi... occhio.'],
-	'opponent:good': ['Uff...', 'Ci mancava.'],
-	'opponent:lucky': ['Che fortuna sfacciata!'],
-	'opponent:bad': ['Eh eh.'],
-	'self:good': ['Come si fa.'],
-	'self:bad': ['Ops.'],
-	'banter:greeting': ['Buona partita a tutti.'],
-	'banter:rival': ['Vediamo come va oggi.'],
+	'partner:good': ['Bravo! 👏', 'Bella giocata, compagno. 😃'],
+	'partner:lucky': ['Che fortuna, compagno! 🍀'],
+	'partner:bad': ['Ahi... occhio. 😬'],
+	'opponent:good': ['Uff... 😒', 'Ci mancava. 🙄'],
+	'opponent:lucky': ['Che fortuna sfacciata! 😤'],
+	'opponent:bad': ['Eh eh. 😏'],
+	'self:good': ['Come si fa. 😎'],
+	'self:bad': ['Ops. 😅'],
+	'banter:greeting': ['Buona partita a tutti. 🙂'],
+	'banter:rival': ['Vediamo come va oggi. 👀'],
 };
