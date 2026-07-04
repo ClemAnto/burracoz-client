@@ -271,7 +271,9 @@
 				@for (meld of ourMeldsData(); track $index) {
 					<ui-deck
 						[style.--z]="$index + 4"
-						[style.height.px]="meld.length * meldCardOffset() + 18"
+						[style.height.px]="
+							meld.length * meldCardOffset() + 18 + (ourMeldTails()[$index] ? 24 : 0)
+						"
 						class="relative z-(--z) shrink-0"
 						layout="vertical"
 						[gap]="-10"
@@ -281,6 +283,7 @@
 								: ''
 						"
 						[cards]="meld"
+						[horizontalTail]="ourMeldTails()[$index]"
 						[selectable]="false"
 						(click)="ourZoneActive() && attachToMeld($index); $event.stopPropagation()"
 					/>
@@ -300,7 +303,11 @@
 				@for (meld of theirMeldsData(); track $index) {
 					<ui-deck
 						[style.--z]="$index + 4"
-						[style.height.px]="meld.length * meldCardOffset() + 18"
+						[style.height.px]="
+							meld.length * meldCardOffset() +
+							18 +
+							(theirMeldTails()[$index] ? 24 : 0)
+						"
 						class="relative z-(--z) shrink-0"
 						[ngClass]="
 							theirZoneActive()
@@ -310,6 +317,7 @@
 						[cards]="meld"
 						layout="vertical"
 						[gap]="-10"
+						[horizontalTail]="theirMeldTails()[$index]"
 						[selectable]="false"
 						(click)="
 							theirZoneActive() && attachToMeld($index); $event.stopPropagation()
@@ -435,7 +443,7 @@
 			/>
 		</div>
 
-		<img class="absolute left-0 top-0 w-full h-full -z-10" src="/images/table_bg.jpg" />
+		<img class="absolute left-0 top-0 w-full h-full -z-10" src="images/table_bg.jpg" />
 	</div>
 
 	<!-- COLONNA MOSSE (solo desktop, collassabile) -->

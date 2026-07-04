@@ -37,6 +37,11 @@
 				<!-- Faccia RESA: override di prospettiva del deck, fallback stato fisico. -->
 				@let fd = renderFaceDown(item);
 				@let selected = selectedSet().has(item.uid);
+				<!-- Carte-segnale del burraco: le ultime `horizontalTail` coricate a 90°.
+				     Rotazione per-carta (override di `rotate`), sempre su `rotate`
+				     compositabile → il Tweener la anima come tutte le altre. -->
+				@let isTail = horizontalTail() > 0 && i >= list().length - horizontalTail();
+				@let cardRotate = isTail ? 90 : (rotate() ?? 0);
 
 				<!-- tween-data: solo proprietà COMPOSITABILI (transform/rotate). Una
 				     custom property nei keyframe (es. --offset) costringerebbe l'INTERA
@@ -46,6 +51,7 @@
 					[style.--offset.px]="offset * (fd ? 1 : -1)"
 					[style.--z]="i"
 					[style.--sel.px]="selected ? -10 : 0"
+					[style.--rotate.deg]="isTail ? 90 : null"
 					(click)="toggleItem(item.uid)"
 					class="rounded-md z-(--z) *:translate-z-(--offset)"
 					[ngClass]="
@@ -57,7 +63,7 @@
 					[attr.tween-data]="
 						{
 							transform: 'rotateY(' + (fd ? 180 : 0) + 'deg)',
-							rotate: (rotate() ?? 0) + 'deg',
+							rotate: cardRotate + 'deg',
 						} | json
 					"
 					[faceDown]="fd"

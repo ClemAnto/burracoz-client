@@ -13,6 +13,7 @@ import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzTagModule } from 'ng-zorro-antd/tag';
 import { AiLongTermMemory, AiPlayer, GameView, TableEvent } from '../../ai/ai-player';
 import { createAi } from '../../ai/personalities';
+import { DeckItem } from '../../services/cards';
 import { Game, GameEvent, GameEventType } from '../../services/game';
 import { LocalStorage } from '../../services/local-storage';
 import { Rules } from '../../services/rules';
@@ -175,6 +176,19 @@ export class Board implements AfterViewInit {
 
 	ourMeldsData = computed(() => this.game.melds().ours);
 	theirMeldsData = computed(() => this.game.melds().opponents);
+
+	/**
+	 * Carte coricate a 90° per marcare il burraco, gioco per gioco:
+	 * 2 = pulito, 1 = semipulito/sporco, 0 = non è (ancora) un burraco.
+	 * Convenzione tradizionale: pulito = ultime due orizzontali, sporco = ultima.
+	 */
+	ourMeldTails = computed(() => this.ourMeldsData().map((m) => this.burracoTail(m)));
+	theirMeldTails = computed(() => this.theirMeldsData().map((m) => this.burracoTail(m)));
+
+	private burracoTail(meld: DeckItem[]): number {
+		const type = this.game.classifyBurraco(meld);
+		return type === 'pulito' ? 2 : type ? 1 : 0;
+	}
 
 	/** True su viewport mobile (per compattare i giochi verticalmente). */
 	mobile = signal(false);

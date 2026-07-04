@@ -37,6 +37,13 @@ export class Deck {
 	selectable = input<boolean>(false);
 	faceDown = input<boolean>(null);
 	rotate = input<number>(null);
+	/**
+	 * Numero di carte FINALI (in fondo alla pila) rese coricate a 90°, come
+	 * marcatura tradizionale del burraco: 2 = pulito, 1 = sporco/semipulito.
+	 * 0 = nessuna marcatura. La rotazione è per-carta (override di `rotate`)
+	 * e resta compositabile → animata dal Tweener come le altre.
+	 */
+	horizontalTail = input<number>(0);
 	/** Spaziatura tra le carte nel layout grid (unità Tailwind spacing, es. 2 = 0.5rem). */
 	gap = input<number>(null);
 	/** Se true, ordina automaticamente le carte per seme poi per rank. */

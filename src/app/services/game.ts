@@ -1,5 +1,6 @@
 import { Injectable, computed, effect, signal } from '@angular/core';
 import { Subject } from 'rxjs';
+import { DeckItem } from './cards';
 import { LocalStorage } from './local-storage';
 import {
 	CardRef,
@@ -191,6 +192,11 @@ export class Game {
 	/** Indica se una squadra ha almeno un burraco (≥7 carte) a terra (computed). */
 	get teamHasBurraco() {
 		return this.round.teamHasBurraco;
+	}
+
+	/** Classifica un gioco come burraco (pulito/semipulito/sporco) o null. */
+	classifyBurraco(meld: DeckItem[]) {
+		return this.round.classifyBurraco(meld);
 	}
 
 	/** Ultimo errore generato da un'azione non valida (null se nessun errore). */

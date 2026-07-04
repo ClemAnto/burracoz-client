@@ -604,7 +604,7 @@ export class Round {
 	 *   oppure combinazione di ≥8 carte con 1 matta;
 	 * - sporco: qualsiasi altro burraco con matte.
 	 */
-	private classifyBurraco(meld: DeckItem[]): 'pulito' | 'semipulito' | 'sporco' | null {
+	classifyBurraco(meld: DeckItem[]): 'pulito' | 'semipulito' | 'sporco' | null {
 		if (meld.length < 7) return null;
 
 		// Combinazione (set): naturali dello stesso valore + eventuali matte.
