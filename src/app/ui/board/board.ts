@@ -18,10 +18,12 @@ import { Rules } from '../../services/rules';
 import {
 	DealResult,
 	PlayerSide,
+	Round,
 	RoundEventType,
 	RoundGameplayEvent,
 	RoundPhase,
 	RoundPlayer,
+	RoundSavedState,
 	RoundTeam,
 	RoundTurnStep,
 	TEAM_BY_PLAYER,
@@ -48,9 +50,10 @@ export class Board implements AfterViewInit {
 	@ViewChild('eastDeck') eastDeck: Deck;
 	@ViewChild('westDeck') westDeck: Deck;
 
-	private game = inject(Game);
+	game = inject(Game);
 	private rules = inject(Rules);
 	private storage = inject(LocalStorage);
+	private round = inject(Round);
 
 	readonly RoundPhase = RoundPhase;
 	readonly RoundTurnStep = RoundTurnStep;
@@ -80,6 +83,13 @@ export class Board implements AfterViewInit {
 
 	/** Log delle decisioni IA (per il debug). */
 	aiLog = signal<string[]>([]);
+
+	// ---- Pannello di debug ----
+	debugPanelOpen = signal(false);
+	/** Editor JSON dello stato del tavolo (RoundSavedState serializzato). */
+	debugStateJson = signal('');
+	/** Esito dell'ultima operazione di debug. */
+	debugMessage = signal('');
 
 	private viewReady = false;
 	private aiScheduled = false;
@@ -598,6 +608,109 @@ export class Board implements AfterViewInit {
 			if (!ai) continue;
 			this.storage.set('ai_ltm_' + seat, ai.exportLongTermMemory());
 		}
+	}
+
+	// ============================================================
+	// DEBUG: stato tavolo (salva / carica / modifica / riprendi)
+	// ============================================================
+
+	toggleDebugPanel(): void {
+		this.debugPanelOpen.update((v) => !v);
+		if (this.debugPanelOpen()) this.captureState();
+	}
+
+	/** Cattura lo stato corrente del tavolo nell'editor. */
+	captureState(): void {
+		this.debugStateJson.set(JSON.stringify(this.round.getState(), null, 2));
+		this.debugMessage.set('Stato catturato dal tavolo.');
+	}
+
+	/**
+	 * Applica lo stato dall'editor e riprende: il conduttore fa reagire l'IA
+	 * da sola (l'effect osserva i signal di Round appena ripristinati).
+	 */
+	applyState(): void {
+		let parsed: RoundSavedState;
+		try {
+			parsed = JSON.parse(this.debugStateJson());
+		} catch (e) {
+			this.debugMessage.set('JSON non valido: ' + (e as Error).message);
+			return;
+		}
+		this.tweener?.reset();
+		this.round.restoreState(parsed);
+		this.sortHands();
+		this.maybeRunAiTurn();
+		this.debugMessage.set("Stato applicato: l'IA riprende dal nuovo stato.");
+	}
+
+	/** Scarica lo stato del tavolo come file JSON. */
+	downloadState(): void {
+		this.captureState();
+		const blob = new Blob([this.debugStateJson()], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = 'burracoz-state.json';
+		link.click();
+		URL.revokeObjectURL(url);
+	}
+
+	/** Carica lo stato del tavolo da un file selezionato (poi premere "Applica"). */
+	loadStateFile(event: Event): void {
+		const input = event.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		const reader = new FileReader();
+		reader.onload = () => {
+			this.debugStateJson.set(String(reader.result ?? ''));
+			this.debugMessage.set('File caricato: premi "Applica".');
+		};
+		reader.readAsText(file);
+		input.value = '';
+	}
+
+	/** Salva lo stato corrente in uno slot locale. */
+	saveStateSlot(): void {
+		this.storage.set('burracoz_debug_state', this.round.getState());
+		this.captureState();
+		this.debugMessage.set('Stato salvato nello slot locale.');
+	}
+
+	/** Carica lo stato dallo slot locale nell'editor (poi premere "Applica"). */
+	loadStateSlot(): void {
+		const saved = this.storage.get<RoundSavedState>('burracoz_debug_state');
+		if (!saved) {
+			this.debugMessage.set('Nessuno slot salvato.');
+			return;
+		}
+		this.debugStateJson.set(JSON.stringify(saved, null, 2));
+		this.debugMessage.set('Slot caricato: premi "Applica".');
+	}
+
+	/** Tag delle carte in mano a un giocatore (per il pannello). */
+	handTags(player: PlayerSide): string {
+		return (
+			this.game
+				.hands()
+				[player].map((c) => c.tag)
+				.join(' ') || '—'
+		);
+	}
+
+	/** Tag di un insieme di carte (mano, gioco, scarti…). */
+	tagsOf(cards: { tag: string }[]): string {
+		return cards.map((c) => c.tag).join(' ') || '—';
+	}
+
+	/** Snapshot della memoria dell'IA di un posto (null se umano). */
+	aiMemoryOf(player: PlayerSide) {
+		return this.seats[player]?.memorySnapshot() ?? null;
+	}
+
+	/** Nome dell'IA di un posto (o "umano"). */
+	aiNameOf(player: PlayerSide): string {
+		return this.seats[player]?.name ?? 'umano';
 	}
 }
 

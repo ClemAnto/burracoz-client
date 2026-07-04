@@ -144,6 +144,7 @@
 	}
 
 	<button nz-button nzDanger class="ml-auto" (click)="resetGame()">RESET</button>
+	<button nz-button nzSize="small" (click)="toggleDebugPanel()">🛠 DEBUG</button>
 	@if (roundPhase() !== RoundPhase.Idle) {}
 </header>
 
@@ -400,3 +401,110 @@
 
 	<img class="absolute left-0 top-0 w-full h-full -z-10" src="/images/table_bg.jpg" />
 </div>
+
+<!-- ============================================================
+  PANNELLO DI DEBUG: stato tavolo completo + memoria IA,
+  con salva / carica / modifica / applica (l'IA riprende).
+============================================================ -->
+@if (debugPanelOpen()) {
+	<aside
+		class="fixed top-0 right-0 z-60 flex h-full w-100 max-w-[92vw] flex-col gap-2 overflow-auto bg-gray-900/97 p-3 text-xs text-gray-100 shadow-2xl"
+	>
+		<div class="flex items-center justify-between">
+			<strong class="text-sm">🛠 Debug tavolo</strong>
+			<button nz-button nzSize="small" (click)="toggleDebugPanel()">✕</button>
+		</div>
+
+		<!-- Stato sintetico -->
+		<div class="rounded bg-black/30 p-2">
+			<div>
+				Fase <b>{{ roundPhase() }}</b> · passo <b>{{ turnStep() }}</b> · turno di
+				<b>{{ currentPlayer() ?? '—' }}</b>
+			</div>
+			<div>Tallone {{ drawPileCards().length }} · Scarti {{ discardPileCards().length }}</div>
+			<div>
+				Punteggio mano: noi <b>{{ handScore()?.ours?.total ?? '—' }}</b> / avv
+				<b>{{ handScore()?.opponents?.total ?? '—' }}</b> — partita
+				{{ totalScore().ours }}/{{ totalScore().opponents }}
+			</div>
+		</div>
+
+		<!-- Mani -->
+		<div class="rounded bg-black/30 p-2">
+			@for (
+				seat of [PlayerSide.North, PlayerSide.East, PlayerSide.South, PlayerSide.West];
+				track seat
+			) {
+				<div class="mb-0.5">
+					<b>{{ PLAYER_LABELS[seat] }}</b>
+					<span class="text-gray-400"
+						>({{ aiNameOf(seat) }}, {{ game.hands()[seat].length }})</span
+					>:
+					{{ handTags(seat) }}
+				</div>
+			}
+		</div>
+
+		<!-- Scarti / pozzetti / giochi -->
+		<div class="rounded bg-black/30 p-2">
+			<div>Scarti: {{ tagsOf(discardPileCards()) }}</div>
+			<div>Pozzetti: {{ pot1Cards().length }} / {{ pot2Cards().length }}</div>
+			<div class="mt-1">Giochi NOI:</div>
+			@for (meld of ourMeldsData(); track $index) {
+				<div class="pl-2 text-green-300">• {{ tagsOf(meld) }}</div>
+			}
+			<div class="mt-1">Giochi AVV:</div>
+			@for (meld of theirMeldsData(); track $index) {
+				<div class="pl-2 text-red-300">• {{ tagsOf(meld) }}</div>
+			}
+		</div>
+
+		<!-- Memoria IA + decisioni -->
+		<div class="rounded bg-black/30 p-2">
+			<div class="mb-1 font-semibold">Memoria IA</div>
+			@for (
+				seat of [PlayerSide.North, PlayerSide.East, PlayerSide.South, PlayerSide.West];
+				track seat
+			) {
+				@if (aiMemoryOf(seat); as mem) {
+					<div>
+						<b>{{ PLAYER_LABELS[seat] }}</b> ({{ aiNameOf(seat) }}): viste
+						{{ mem.seenCards.length }} carte
+					</div>
+				}
+			}
+			<div class="mt-1 font-semibold">Ultime decisioni</div>
+			@for (line of aiLog().slice(-8); track $index) {
+				<div class="text-gray-300">{{ line }}</div>
+			}
+		</div>
+
+		<!-- Editor stato: salva / carica / modifica / applica -->
+		<div class="flex flex-col gap-1">
+			<div class="flex flex-wrap gap-1">
+				<button nz-button nzSize="small" (click)="captureState()">Cattura</button>
+				<button nz-button nzSize="small" nzType="primary" (click)="applyState()">
+					Applica
+				</button>
+				<button nz-button nzSize="small" (click)="downloadState()">Scarica</button>
+				<button nz-button nzSize="small" (click)="saveStateSlot()">Salva slot</button>
+				<button nz-button nzSize="small" (click)="loadStateSlot()">Carica slot</button>
+			</div>
+			<input
+				type="file"
+				accept="application/json"
+				(change)="loadStateFile($event)"
+				class="text-[11px]"
+			/>
+			<textarea
+				class="h-64 w-full resize-y rounded bg-black/50 p-2 font-mono text-[11px] text-gray-100"
+				spellcheck="false"
+				[value]="debugStateJson()"
+				(input)="debugStateJson.set($any($event.target).value)"
+			></textarea>
+			@if (debugMessage()) {
+				<div class="text-amber-300">{{ debugMessage() }}</div>
+			}
+		</div>
+	</aside>
+}
