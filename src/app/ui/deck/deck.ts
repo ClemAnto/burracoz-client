@@ -13,7 +13,7 @@ import { CommonModule } from '@angular/common';
 import { DeckItem, sortBySuitThenRank } from '../../services/cards';
 import { Card } from '../card/card';
 
-const CARD_SIZE = { W: 32, H: 40 };
+const CARD_SIZE = { W: 40, H: 56 };
 
 @Component({
 	selector: 'ui-deck',

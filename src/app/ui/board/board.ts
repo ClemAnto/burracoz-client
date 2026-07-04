@@ -4,6 +4,7 @@ import {
 	Component,
 	computed,
 	effect,
+	ElementRef,
 	inject,
 	signal,
 	ViewChild,
@@ -60,6 +61,7 @@ export class Board implements AfterViewInit {
 	@ViewChild('southDeck') southDeck: Deck;
 	@ViewChild('eastDeck') eastDeck: Deck;
 	@ViewChild('westDeck') westDeck: Deck;
+	@ViewChild('meldArea') meldArea?: ElementRef<HTMLElement>;
 
 	game = inject(Game);
 	private rules = inject(Rules);
@@ -174,6 +176,31 @@ export class Board implements AfterViewInit {
 	ourMeldsData = computed(() => this.game.melds().ours);
 	theirMeldsData = computed(() => this.game.melds().opponents);
 
+	/** True su viewport mobile (per compattare i giochi verticalmente). */
+	mobile = signal(false);
+	/** Altezza disponibile dell'area giochi in px (aggiornata da ResizeObserver). */
+	private meldAreaHeight = signal(0);
+	/** Lunghezza del gioco più lungo in campo (per dimensionare l'offset). */
+	maxMeldLen = computed(() =>
+		[...this.ourMeldsData(), ...this.theirMeldsData()].reduce(
+			(max, meld) => Math.max(max, meld.length),
+			1,
+		),
+	);
+	/**
+	 * Offset verticale per carta nei giochi. Desktop: fisso. Mobile: ridotto
+	 * quanto serve perché anche il gioco più lungo stia in metà area, così i
+	 * giochi non superano 2 righe; scende fino a un minimo compatto (12px).
+	 */
+	meldCardOffset = computed(() => {
+		if (!this.mobile()) return 34;
+		const areaH = this.meldAreaHeight();
+		const len = this.maxMeldLen();
+		if (!areaH || len <= 1) return 26;
+		const rowH = (areaH - 24) / 2; // due righe, meno gap-y/padding
+		return Math.max(12, Math.min(26, Math.floor((rowH - 18) / len)));
+	});
+
 	/** True quando tocca a un posto UMANO (seats[player] === null). */
 	isHumanTurn = computed(() => {
 		const player = this.currentPlayer();
@@ -219,6 +246,13 @@ export class Board implements AfterViewInit {
 				moveListOpen: this.moveListOpen(),
 			}),
 		);
+
+		// Adatta l'offset verticale dei giochi al viewport mobile.
+		if (typeof matchMedia === 'function') {
+			const mq = matchMedia('(max-width: 640px)');
+			this.mobile.set(mq.matches);
+			mq.addEventListener('change', (e) => this.mobile.set(e.matches));
+		}
 
 		// Loop dei turni: quando tocca a un posto IA, il conduttore esegue il turno.
 		effect(() => {
@@ -307,6 +341,14 @@ export class Board implements AfterViewInit {
 		this.viewReady = true;
 		this.loadAiMemories(); // memoria IA persistita (anche dopo F5)
 		this.maybeRunAiTurn();
+
+		// Osserva l'altezza dell'area giochi per dimensionare l'offset dei giochi.
+		const meldEl = this.meldArea?.nativeElement;
+		if (meldEl && typeof ResizeObserver === 'function') {
+			const observer = new ResizeObserver(() => this.meldAreaHeight.set(meldEl.clientHeight));
+			observer.observe(meldEl);
+			this.meldAreaHeight.set(meldEl.clientHeight);
+		}
 	}
 
 	/**

@@ -1,7 +1,7 @@
 @reference "tailwindcss";
 
 :host {
-	@apply w-8 h-10 select-none transform-3d perspective-origin-[-60px_100px] perspective-[100px];
+	@apply w-10 h-14 select-none transform-3d perspective-origin-[-60px_100px] perspective-[100px];
 
 	// Il flip fronte/retro durante un tween è gestito dal Tweener (WAAPI)
 	// animando `transform` dal valore sorgente a questo valore sottostante.
