@@ -269,6 +269,8 @@ export class Game {
 				handHistory: this.handHistory(),
 				round: this.round.getState(),
 			};
+			// Non persistere gli stati intermedi di replay/player.
+			if (this.suspendHistory) return;
 			this.storage.set(Game.STORAGE_KEY, state);
 		});
 	}
@@ -420,7 +422,6 @@ export class Game {
 	// ============================================================
 
 	private loadFromStorage(): void {
-		return;
 		const state = this.storage.get<GameSavedState>(Game.STORAGE_KEY);
 		if (!state?.round) return;
 		this.phase.set(state.gamePhase);

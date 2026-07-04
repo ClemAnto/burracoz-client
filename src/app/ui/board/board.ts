@@ -38,6 +38,9 @@ import {
 import { Deck } from '../deck/deck';
 import { Tweener } from '../tweener/tweener';
 
+/** Velocità delle mosse IA. 'manual' = un passo per ogni "AVANTI". */
+export type AiSpeed = 'manual' | 'slow' | 'medium' | 'fast';
+
 @Component({
 	selector: 'ui-board',
 	imports: [NzButtonModule, NzTagModule, Deck, Tweener, UpperCasePipe, NgClass],
@@ -110,8 +113,18 @@ export class Board implements AfterViewInit {
 
 	private viewReady = false;
 	private aiScheduled = false;
-	private readonly AI_TURN_DELAY = 350;
-	private readonly AI_ACTION_DELAY = 180;
+
+	/** Velocità delle mosse IA (persistita). 'manual' = avanzamento con "AVANTI". */
+	aiSpeed = signal<AiSpeed>('medium');
+	/** True quando una mossa IA è in attesa di "AVANTI" (modalità manuale). */
+	stepPending = signal(false);
+	private stepResolver: (() => void) | null = null;
+	readonly SPEED_OPTIONS = [
+		{ value: 'manual', label: 'Manuale' },
+		{ value: 'slow', label: 'Lento' },
+		{ value: 'medium', label: 'Medio' },
+		{ value: 'fast', label: 'Veloce' },
+	] as const;
 
 	// Modalità debug: tutte le mani scoperte (true = carte visibili per tutti)
 	debug = signal(true);
@@ -189,6 +202,11 @@ export class Board implements AfterViewInit {
 	private busy = false;
 
 	constructor() {
+		// Impostazioni persistite (es. velocità IA): carica all'avvio, salva a ogni cambio.
+		const settings = this.storage.get<{ aiSpeed?: AiSpeed }>('burracoz_settings');
+		if (settings?.aiSpeed) this.aiSpeed.set(settings.aiSpeed);
+		effect(() => this.storage.set('burracoz_settings', { aiSpeed: this.aiSpeed() }));
+
 		// Loop dei turni: quando tocca a un posto IA, il conduttore esegue il turno.
 		effect(() => {
 			// dipendenze reattive dell'effect
@@ -274,6 +292,7 @@ export class Board implements AfterViewInit {
 			[PlayerSide.West]: this.westDeck,
 		};
 		this.viewReady = true;
+		this.loadAiMemories(); // memoria IA persistita (anche dopo F5)
 		this.maybeRunAiTurn();
 	}
 
@@ -426,15 +445,57 @@ export class Board implements AfterViewInit {
 		const player = this.currentPlayer();
 		if (!player || !this.seats[player]) return;
 		if (this.roundPhase() !== RoundPhase.InProgress) return;
-		if (this.turnStep() !== RoundTurnStep.DrawOrCollect) return;
+		// setTimeout(0) esce dall'effect (i signal write avvengono fuori dal contesto
+		// reattivo); il ritmo vero è dentro runAiTurn (waitStep). Nessun filtro sulla
+		// fase: così dopo un F5 si riprende anche a metà turno (gioca-e-scarta).
 		this.aiScheduled = true;
 		setTimeout(() => {
 			this.aiScheduled = false;
 			void this.runAiTurn();
-		}, this.AI_TURN_DELAY);
+		}, 0);
 	}
 
-	/** Esegue l'intero turno del bot corrente: pesca → giochi → scarto. */
+	/** Pausa prima di una mossa IA: attende "AVANTI" in manuale, altrimenti il delay. */
+	private async waitStep(): Promise<void> {
+		if (this.aiSpeed() === 'manual') {
+			this.stepPending.set(true);
+			await new Promise<void>((resolve) => (this.stepResolver = resolve));
+			return;
+		}
+		await sleep(this.speedDelay());
+	}
+
+	private speedDelay(): number {
+		switch (this.aiSpeed()) {
+			case 'slow':
+				return 850;
+			case 'fast':
+				return 90;
+			default:
+				return 350; // medio
+		}
+	}
+
+	/** Sblocca la prossima mossa IA in modalità manuale. */
+	advanceStep(): void {
+		const resolve = this.stepResolver;
+		this.stepResolver = null;
+		this.stepPending.set(false);
+		resolve?.();
+	}
+
+	/** Imposta la velocità (persistita dall'effect); se esce da manuale, sblocca. */
+	setAiSpeed(speed: AiSpeed): void {
+		this.aiSpeed.set(speed);
+		if (speed !== 'manual' && this.stepResolver) this.advanceStep();
+	}
+
+	/** Turno interrotto (player aperto o reset). */
+	private aborted(): boolean {
+		return !!this.playback();
+	}
+
+	/** Esegue il turno del bot corrente: pesca → giochi → scarto, col ritmo scelto. */
 	private async runAiTurn(): Promise<void> {
 		if (this.busy) return;
 		const player = this.currentPlayer();
@@ -442,41 +503,43 @@ export class Board implements AfterViewInit {
 		const ai = this.seats[player];
 		if (!ai) return;
 		if (this.roundPhase() !== RoundPhase.InProgress) return;
-		if (this.turnStep() !== RoundTurnStep.DrawOrCollect) return;
 
 		this.busy = true;
 		try {
-			// PESCA
-			const draw = ai.decideDraw(this.buildView(player));
-			this.logAi(player, draw.reason);
-			const wantsPile = draw.value === 'discard' && this.game.discardPile().length > 0;
-			let drew = wantsPile ? this.game.takeDiscardPile() : this.game.drawFromStock();
-			if (!drew) {
-				// Fallback sull'altra fonte se la preferita non è disponibile.
-				drew = this.game.discardPile().length
-					? this.game.takeDiscardPile()
-					: this.game.drawFromStock();
+			// PESCA (saltata se, dopo un F5, il turno è già in fase gioca-e-scarta).
+			if (this.turnStep() === RoundTurnStep.DrawOrCollect) {
+				await this.waitStep();
+				if (this.aborted()) return;
+				const draw = ai.decideDraw(this.buildView(player));
+				this.logAi(player, draw.reason);
+				const wantsPile = draw.value === 'discard' && this.game.discardPile().length > 0;
+				let drew = wantsPile ? this.game.takeDiscardPile() : this.game.drawFromStock();
+				if (!drew) {
+					drew = this.game.discardPile().length
+						? this.game.takeDiscardPile()
+						: this.game.drawFromStock();
+				}
+				if (!drew) {
+					// Tallone e monte vuoti: turno impossibile, sospende il bot.
+					this.logAi(
+						player,
+						'Nessuna pesca possibile: turno sospeso (tallone esaurito).',
+					);
+					return;
+				}
+				await this.tweener.whenIdle();
+				this.playerDecks[player]?.autosortNow();
 			}
-			if (!drew) {
-				// Tallone e monte vuoti: turno impossibile. Sospende il bot senza
-				// rischedulare (niente busy-loop). Fine tallone da gestire a parte.
-				this.logAi(
-					player,
-					'Nessuna pesca possibile: turno bot sospeso (tallone esaurito).',
-				);
-				return;
-			}
-			await this.tweener.whenIdle();
-			this.playerDecks[player]?.autosortNow();
-			await sleep(this.AI_ACTION_DELAY);
-			if (this.playback()) return; // player aperto a metà turno: interrompi
 
+			if (this.aborted()) return;
 			// GIOCHI (calate + appoggi)
 			const plays = ai.decidePlays(this.buildView(player));
 			this.logAi(player, plays.reason);
 			for (const play of plays.value) {
 				if (this.roundPhase() !== RoundPhase.InProgress) break;
 				if (this.turnStep() !== RoundTurnStep.PlayAndDiscard) break;
+				await this.waitStep();
+				if (this.aborted()) return;
 				const ok =
 					play.kind === 'open'
 						? this.game.openMeld(play.cards)
@@ -484,15 +547,16 @@ export class Board implements AfterViewInit {
 				if (!ok) continue;
 				await this.tweener.whenIdle();
 				this.playerDecks[player]?.autosortNow();
-				await sleep(this.AI_ACTION_DELAY);
 			}
 
-			if (this.playback()) return; // player aperto a metà turno: interrompi
+			if (this.aborted()) return;
 			// SCARTO (se la mano non è già chiusa dalle giocate)
 			if (
 				this.roundPhase() === RoundPhase.InProgress &&
 				this.turnStep() === RoundTurnStep.PlayAndDiscard
 			) {
+				await this.waitStep();
+				if (this.aborted()) return;
 				const discard = ai.decideDiscard(this.buildView(player));
 				this.logAi(player, discard.reason);
 				if (discard.value) this.game.discard(discard.value);
