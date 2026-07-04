@@ -28,6 +28,13 @@ import {
 	RoundTurnStep,
 	TEAM_BY_PLAYER,
 } from '../../services/round';
+import {
+	decodeMoveList,
+	describeTurn,
+	encodeMoveList,
+	ReplayMove,
+	splitTurns,
+} from '../../services/move-notation';
 import { Deck } from '../deck/deck';
 import { Tweener } from '../tweener/tweener';
 
@@ -90,6 +97,16 @@ export class Board implements AfterViewInit {
 	debugStateJson = signal('');
 	/** Esito dell'ultima operazione di debug. */
 	debugMessage = signal('');
+
+	// ---- Notazione mosse + player ----
+	private moveLog = signal<RoundGameplayEvent[]>([]);
+	private moveSetup: RoundSavedState | null = null;
+	moveNotationText = signal('');
+	/** Player: turni caricati + deal (null = player non attivo). */
+	playback = signal<{ setup: RoundSavedState; turns: ReplayMove[][] } | null>(null);
+	playbackTurn = signal(0);
+	/** True mentre si riproducono mosse (player/replay): niente registrazione/voce. */
+	private replaying = false;
 
 	private viewReady = false;
 	private aiScheduled = false;
@@ -181,8 +198,8 @@ export class Board implements AfterViewInit {
 			this.maybeRunAiTurn();
 		});
 
-		// Broadcast degli eventi di gioco fini a tutte le IA (memoria + voce).
-		this.game.gameplayEvents.subscribe((event) => this.broadcast(this.toTableEvent(event)));
+		// Registra le mosse e le trasmette alle IA (memoria + voce).
+		this.game.gameplayEvents.subscribe((event) => this.onGameplayEvent(event));
 		// Eventi di partita: banter, reset memoria, apprendimento, persistenza.
 		this.game.gameEvents.subscribe((event) => this.onGameEvent(event));
 	}
@@ -404,7 +421,8 @@ export class Board implements AfterViewInit {
 
 	/** Programma il turno del bot corrente, se è il momento (fuori dall'effect). */
 	private maybeRunAiTurn(): void {
-		if (this.aiScheduled || this.busy || !this.viewReady) return;
+		if (this.aiScheduled || this.busy || !this.viewReady || this.replaying || this.playback())
+			return;
 		const player = this.currentPlayer();
 		if (!player || !this.seats[player]) return;
 		if (this.roundPhase() !== RoundPhase.InProgress) return;
@@ -451,6 +469,7 @@ export class Board implements AfterViewInit {
 			await this.tweener.whenIdle();
 			this.playerDecks[player]?.autosortNow();
 			await sleep(this.AI_ACTION_DELAY);
+			if (this.playback()) return; // player aperto a metà turno: interrompi
 
 			// GIOCHI (calate + appoggi)
 			const plays = ai.decidePlays(this.buildView(player));
@@ -468,6 +487,7 @@ export class Board implements AfterViewInit {
 				await sleep(this.AI_ACTION_DELAY);
 			}
 
+			if (this.playback()) return; // player aperto a metà turno: interrompi
 			// SCARTO (se la mano non è già chiusa dalle giocate)
 			if (
 				this.roundPhase() === RoundPhase.InProgress &&
@@ -527,6 +547,13 @@ export class Board implements AfterViewInit {
 
 	// ---- Broadcast eventi → IA (memoria + voce) ----
 
+	/** Un evento di gioco: lo registra (per l'export) e lo trasmette alle IA. */
+	private onGameplayEvent(event: RoundGameplayEvent): void {
+		if (this.replaying) return; // durante il player non si registra né si commenta
+		this.moveLog.update((log) => [...log, event]);
+		this.broadcast(this.toTableEvent(event));
+	}
+
 	private broadcast(event: TableEvent): void {
 		for (const seat of ALL_SEATS) {
 			const ai = this.seats[seat];
@@ -566,6 +593,9 @@ export class Board implements AfterViewInit {
 				this.broadcastSystem('game_start');
 				break;
 			case GameEventType.HandStarted:
+				// Nuova mano: fotografa il deal e azzera la registrazione delle mosse.
+				this.moveSetup = this.round.getState();
+				this.moveLog.set([]);
 				this.broadcastSystem('hand_start');
 				break;
 			case GameEventType.HandEnded:
@@ -711,6 +741,141 @@ export class Board implements AfterViewInit {
 	/** Nome dell'IA di un posto (o "umano"). */
 	aiNameOf(player: PlayerSide): string {
 		return this.seats[player]?.name ?? 'umano';
+	}
+
+	// ============================================================
+	// NOTAZIONE MOSSE (export/import) + PLAYER (avanti/indietro)
+	// ============================================================
+
+	/** Esporta le mosse della mano corrente in notazione testuale leggibile. */
+	exportMoves(): void {
+		const setup = this.moveSetup ?? this.round.getState();
+		const seats =
+			`Nord=${this.aiNameOf(PlayerSide.North)} Est=${this.aiNameOf(PlayerSide.East)} ` +
+			`Sud=${this.aiNameOf(PlayerSide.South)} Ovest=${this.aiNameOf(PlayerSide.West)}`;
+		this.moveNotationText.set(encodeMoveList(setup, this.moveLog(), { seats }));
+		this.debugMessage.set('Mosse esportate nella casella.');
+	}
+
+	/** Scarica la notazione come file di testo. */
+	downloadMoves(): void {
+		this.exportMoves();
+		const blob = new Blob([this.moveNotationText()], { type: 'text/plain' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = 'burracoz-mosse.txt';
+		link.click();
+		URL.revokeObjectURL(url);
+	}
+
+	/** Carica una notazione da file nella casella (poi "Apri player"). */
+	loadMovesFile(event: Event): void {
+		const input = event.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		const reader = new FileReader();
+		reader.onload = () => {
+			this.moveNotationText.set(String(reader.result ?? ''));
+			this.debugMessage.set('Notazione caricata: premi "Apri player".');
+		};
+		reader.readAsText(file);
+		input.value = '';
+	}
+
+	/** Apre il player dalla notazione nella casella (turno 0 = inizio mano). */
+	openPlayer(): void {
+		let decoded;
+		try {
+			decoded = decodeMoveList(this.moveNotationText());
+		} catch (e) {
+			this.debugMessage.set('Notazione non valida: ' + (e as Error).message);
+			return;
+		}
+		const turns = splitTurns(decoded.moves);
+		this.animate.set(false);
+		this.playback.set({ setup: decoded.setup, turns });
+		this.gotoTurn(0);
+		this.debugMessage.set(`Player aperto: ${turns.length} turni.`);
+	}
+
+	/** Ricostruisce lo stato fino al turno `target` (0 = solo deal). */
+	gotoTurn(target: number): void {
+		const pb = this.playback();
+		if (!pb) return;
+		const t = Math.max(0, Math.min(target, pb.turns.length));
+		this.replaying = true;
+		this.game.suspendHistory = true;
+		try {
+			this.tweener?.reset();
+			this.round.restoreState(pb.setup);
+			for (let i = 0; i < t; i++) {
+				for (const move of pb.turns[i]) this.applyReplayMove(move);
+			}
+		} finally {
+			this.replaying = false;
+			this.game.suspendHistory = false;
+		}
+		this.playbackTurn.set(t);
+		this.sortHands();
+	}
+
+	playerNext(): void {
+		this.gotoTurn(this.playbackTurn() + 1);
+	}
+	playerPrev(): void {
+		this.gotoTurn(this.playbackTurn() - 1);
+	}
+	playerStart(): void {
+		this.gotoTurn(0);
+	}
+	playerEnd(): void {
+		const pb = this.playback();
+		if (pb) this.gotoTurn(pb.turns.length);
+	}
+
+	/** Etichetta leggibile del turno corrente del player. */
+	playerLabel(): string {
+		const pb = this.playback();
+		if (!pb) return '';
+		const t = this.playbackTurn();
+		if (t === 0) return `Inizio mano · 0 / ${pb.turns.length}`;
+		return `Turno ${t} / ${pb.turns.length} — ${describeTurn(pb.turns[t - 1])}`;
+	}
+
+	/** Chiude il player; se `resume`, riprende la partita dallo stato mostrato. */
+	closePlayer(resume: boolean): void {
+		this.playback.set(null);
+		this.tweener?.reset();
+		this.animate.set(true);
+		if (resume) {
+			this.moveSetup = this.round.getState();
+			this.moveLog.set([]);
+			this.debugMessage.set('Partita ripresa da questo turno.');
+			this.maybeRunAiTurn();
+		} else {
+			this.debugMessage.set('Player chiuso.');
+		}
+	}
+
+	private applyReplayMove(move: ReplayMove): void {
+		switch (move.type) {
+			case 'draw':
+				this.game.drawFromStock();
+				break;
+			case 'take_discard':
+				this.game.takeDiscardPile();
+				break;
+			case 'open':
+				this.game.openMeld(move.cards);
+				break;
+			case 'attach':
+				this.game.attachToMeld(move.meldIndex, move.cards);
+				break;
+			case 'discard':
+				this.game.discard(move.cards[0]);
+				break;
+		}
 	}
 }
 

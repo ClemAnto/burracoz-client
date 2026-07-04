@@ -116,6 +116,12 @@ export class Game {
 	/** True quando la partita è terminata (una squadra ha superato la soglia). */
 	readonly isGameEnded = computed(() => this.phase() === GamePhase.Ended);
 
+	/**
+	 * Quando true, la chiusura di una mano NON viene registrata nello storico:
+	 * usato durante il replay/player delle mosse per non sporcare la partita reale.
+	 */
+	suspendHistory = false;
+
 	// ----------------------------------------------------------
 	// Passthrough dei signal del Round (livello mano corrente)
 	// Esposti tramite getter per evitare problemi di inizializzazione
@@ -435,6 +441,9 @@ export class Game {
 		winnerTeam: RoundTeam,
 		score: RoundScore,
 	): void {
+		// Durante il replay/player non si registra la mano nella partita reale.
+		if (this.suspendHistory) return;
+
 		const result: HandResult = {
 			handIndex: this.handIndex(),
 			winnerPlayer,

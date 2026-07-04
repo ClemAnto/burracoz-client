@@ -506,5 +506,54 @@
 				<div class="text-amber-300">{{ debugMessage() }}</div>
 			}
 		</div>
+
+		<!-- Notazione mosse (leggibile) + player -->
+		<div class="flex flex-col gap-1 border-t border-white/10 pt-2">
+			<div class="font-semibold">Notazione mosse</div>
+			<div class="flex flex-wrap gap-1">
+				<button nz-button nzSize="small" (click)="exportMoves()">Esporta</button>
+				<button nz-button nzSize="small" (click)="downloadMoves()">Scarica</button>
+				<button nz-button nzSize="small" nzType="primary" (click)="openPlayer()">
+					Apri player
+				</button>
+			</div>
+			<input
+				type="file"
+				accept=".txt,text/plain"
+				(change)="loadMovesFile($event)"
+				class="text-[11px]"
+			/>
+			<textarea
+				class="h-40 w-full resize-y rounded bg-black/50 p-2 font-mono text-[11px] text-gray-100"
+				spellcheck="false"
+				[value]="moveNotationText()"
+				(input)="moveNotationText.set($any($event.target).value)"
+			></textarea>
+
+			@if (playback(); as pb) {
+				<div class="rounded bg-indigo-900/40 p-2">
+					<div class="mb-1 flex items-center justify-center gap-1">
+						<button nz-button nzSize="small" (click)="playerStart()">⏮</button>
+						<button nz-button nzSize="small" (click)="playerPrev()">◀</button>
+						<button nz-button nzSize="small" (click)="playerNext()">▶</button>
+						<button nz-button nzSize="small" (click)="playerEnd()">⏭</button>
+					</div>
+					<div class="mb-1 text-center text-amber-200">{{ playerLabel() }}</div>
+					<div class="flex justify-center gap-1">
+						<button
+							nz-button
+							nzSize="small"
+							nzType="primary"
+							(click)="closePlayer(true)"
+						>
+							Riprendi da qui
+						</button>
+						<button nz-button nzSize="small" (click)="closePlayer(false)">
+							Chiudi player
+						</button>
+					</div>
+				</div>
+			}
+		</div>
 	</aside>
 }
