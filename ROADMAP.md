@@ -1,88 +1,96 @@
 # Burracoz — Roadmap verso il prodotto completo
 
 > Angular 21 (standalone, signals) · ng-zorro + Tailwind 4 · client-only
-> Stato documento: aggiornato al 2026-07-04 — **baseline consolidata**: suite 44/44 verde (riverificata), audit Playwright end-to-end OK. Fondamenta (entità carte, single-writer, Tweener v2, univocità 108 carte) considerate stabili: da qui si costruisce solo logica di gioco.
+> Stato documento: aggiornato al 2026-07-05 (3ª sessione). **Giocabile davvero da un umano** (default "gioco vero": SUD umano+scoperto, EST/NORD/OVEST IA+coperti) tramite la **modale Impostazioni** (per-posto IA/carte scoperte + velocità). Suite 68/68 verde. ⚠️ Il primo blocco (marcatura burraco + fix sfondo Pages) è pubblicato; **il resto della 3ª sessione è nel working tree, non ancora committato**.
 
 Gioco di Burraco (regole F.I.Bur. italiane). Architettura:
 **Game** (facade multi-mano) → **Round** (logica di una mano) → **Rules** (validazione giochi).
-La UI (**Board** + **Deck**) usa un layer di animazione FLIP custom (**Tweener**).
+UI: **Board** → **Deck** → **Card** con FLIP custom (**Tweener**).
+**IA** in `src/app/ai/` (contratto puro stato→decisioni). Sito live: https://clemanto.github.io/burracoz-client/
 
 ---
 
 ## 📊 Stato attuale (sintesi)
 
-| Modulo                     | Stato       | Note                                                                                                                                                                                                                     |
-| -------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Motore regole (`rules.ts`) | 🟢 maturo   | set/run/attach con matte, incastri, assi, 2 naturale, canasta pulita. Testato.                                                                                                                                           |
-| Modello carte (`cards.ts`) | 🟢 maturo   | **entità `DeckItem`/`DeckItems` (dal refactoring)**, parsing, mazzo, rank, ordinamento. Modulo foglia.                                                                                                                   |
-| Round (`round.ts`)         | 🟡 parziale | deal, turni, calate, pozzetto, chiusura + **punteggio (fatto)**. Unico scrittore dello stato carte (`faceDown` incluso). Mancano `takeDiscardPile`, `undoTurn`.                                                          |
-| Game (`game.ts`)           | 🟡 parziale | multi-mano, storico, eventi. Mancano fine partita e persistenza attiva.                                                                                                                                                  |
-| UI Board/Deck              | 🟡 parziale | tavolo 4 giocatori, overlay punteggio, autosort + drag&drop, **refactoring single-writer (fatto)**, **Tweener v2 WAAPI/`uiTweenScope` (fatto)**: FLIP su compositor, fix carte sparite, audit univocità. Styling da dev. |
-| Avversari (AI)             | 🔴 assente  | nessun bot; oggi l'umano controlla tutti in modalità debug.                                                                                                                                                              |
-| Multiplayer/backend        | 🔴 assente  | nessun server.                                                                                                                                                                                                           |
-| Test                       | 🟡 parziale | 44 verdi: rules, invarianti round (108/uid), cards (parsing/entità), deck (riordino), tweener. Manca copertura scoring/chiusura; harness `tests.ts` da migrare.                                                          |
+| Modulo                     | Stato       | Note                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Motore regole (`rules.ts`) | 🟢 maturo   | set/run/attach con matte, incastri, assi, 2 naturale, canasta pulita. **`getCardAbsPos` order-independent** (fix estensione scala con matta-incastro). **Audit vs regolamento ufficiale** (`rules-audit.spec.ts`): conforme.                                                                                                                                                                                                                                                            |
+| Modello carte (`cards.ts`) | 🟢 maturo   | entità `DeckItem`/`DeckItems`, parsing, mazzo, rank, ordinamento. Modulo foglia.                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Round (`round.ts`)         | 🟢 maturo   | deal, turni, calate, pozzetto, chiusura, punteggio, **takeDiscardPile**, **Art.14 (no chiusura con matta)**, **eventi di gioco fini** (`gameplayEvents`). **Undo** ora gestito dalla Board via snapshot `getState`/`restoreState`. Manca fine-tallone.                                                                                                                                                                                                                                  |
+| Game (`game.ts`)           | 🟢 maturo   | multi-mano, storico, eventi, **fine partita** (soglia 2005 + `GameEnded`), **persistenza F5 attiva** (`suspendHistory` durante replay).                                                                                                                                                                                                                                                                                                                                                 |
+| IA (`ai/`)                 | 🟡 base     | contratto+`DefaultAi`+personalità (sergio/maria)+registro; conduttore in Board (0..4 posti, velocità, manuale/AVANTI), memoria episodica+lungo termine, voce+emoji. Strategia semplice (no scale asso-alto).                                                                                                                                                                                                                                                                            |
+| UI Board/Deck              | 🟢 buona    | **layout centrale a 3 righe** (LORO / pesca-scarti-pozzetti / NOI), pozzetti sovrapposti concentrici (prospettiva condivisa `.pot-3d`), **etichette posti uniformi in alto-a-sx** (`.seat`), **modale Impostazioni**, **colonna mosse in `nz-drawer`**, **undo/scarto-via-click/PESCA-PRENDI**, **drag&drop riordino mano** + inserimento intelligente carte nuove, overlay fine-mano estratto in `ui-hand-result`. **Icone `<nz-icon>`** (no emoji). Mani coperte per-posto (default). |
+| Notazione/replay           | 🟢 fatto    | `move-notation.ts` (formato testo leggibile IT) + player mosse (avanti/indietro) nel pannello debug.                                                                                                                                                                                                                                                                                                                                                                                    |
+| Pubblicazione              | 🟢 fatto    | repo PUBBLICA, GitHub Pages via Actions (`deploy.yml`), CI (`ci.yml`: format+build+test).                                                                                                                                                                                                                                                                                                                                                                                               |
+| Avversari — strategia      | 🟡 base     | i bot giocano ma in modo semplice/greedy; da potenziare.                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Multiplayer/backend        | 🔴 assente  | nessun server.                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Test                       | 🟡 68 verdi | rules (+ `rules-audit.spec.ts` conformità regolamento), round, cards, deck, tweener, game, move-notation, board/stage (smoke, con `NzIconService.addIcon`). Manca copertura IA e harness `tests.ts` da migrare.                                                                                                                                                                                                                                                                         |
 
 ---
 
-## ✅ Completato di recente
+## ✅ Completato nella 3ª sessione (2026-07-05)
 
-- **Tweener v2 + caccia al bug "carte sparite"** (2026-07-04): layer FLIP riscritto su Web Animations API come direttiva riusabile `uiTweenScope` (pairing per uid anche con rimozioni differite, retarget dei voli con soglia, `hold()/release()` nel drag, `whenIdle`, audit di univocità); trovata e rimossa la causa VERA delle carte sparite ai riordini — `animate.enter/leave` sui pivot del `@for` interpretava gli SPOSTAMENTI come rimozioni ed eliminava dal DOM elementi vivi; azioni di gioco per ISTANZA/uid (`CardRef`) perché il tag è ambiguo nel mazzo doppio (+ fix pozzetto mancante in `attachToMeld`); test d'invariante 108-carte-uniche in `round.spec.ts`; fluidità deal su compositor GPU (keyframe solo compositabili) verificata con Playwright (zero frame >20ms); log di fase `[burracoz]` e diagnostici `[tween]`.
-- **Refactoring Deck/Card "single writer"** (2026-07-04, vedi MEMO.md): entità carta (`DeckItem`) spostata in `services/cards.ts` (il dominio non importa più dalla UI); pesca e scarto committano direttamente sul Game e il FLIP anima da solo i cross-deck (staging imperativo SOLO nel deal); ownership di `faceDown` al Round con override di prospettiva nel Deck (`renderFaceDown` — il toggle debug ora riflippa le mani reattivamente); API Deck snellita dal codice morto; `ui-card` riceve l'istanza già parsata. Verificato: 44 test verdi + audit Playwright end-to-end.
-- **Ordinamento funzionale automatico** delle carte in mano (seme → rank) su tutti i giocatori (`autosort`).
-- **Drag & drop** per riordinare la propria mano (`reorderable` sul deck South), integrato col Tweener FLIP; l'ordine manuale viene preservato tra pesca/scarto e resettato a nuova mano.
-- **Calcolo del punteggio** reale in `Round.computeScore()`: valori carta (Jolly 30 / Pinella 20 / Asso 15 / K-Q-J-10 = 10 / 9-3 = 5), bonus burraco (pulito +200, semipulito +150, sporco +100), bonus chiusura +100, penalità carte in mano e pozzetto non preso (-100).
+- **Marcatura burraco**: ultime carte coricate a 90° (`horizontalTail` sul Deck; pulito=2, semi/sporco=1); `classifyBurraco` pubblico + passthrough Game. **Fix sfondo su Pages** (path relativo).
+- **Modale Impostazioni**: per-posto **IA on/off** + **carte scoperte on/off**, **velocità IA**; default "gioco vero" (SUD umano+scoperto, resto IA+coperto, lento). Rimosso il flag globale `debug`; `seats`→`seatAi`+`aiEnabled`+`aiAt()`, `faceUp` per-posto (persistiti). **Controllo umano per-posto** corretto.
+- **Turno umano**: **undo** (`ANNULLA`) ultima mossa via snapshot (tranne pesca dal tallone); **scarto = seleziona + click sul monte scarti** (niente tasto SCARTA); **PESCA/PRENDI** evidenziati; **drag&drop** riordino mano; **inserimento intelligente** delle carte nuove (autosort off per l'umano, sort solo al deal).
+- **Layout**: area centrale a **3 righe** (LORO/pesca-scarti-pozzetti/NOI); **pozzetti** sovrapposti concentrici (`grid-stack`, prospettiva condivisa `.pot-3d`+`preserve-3d`, no outline); **etichette posti** uniformi in alto-a-sx (`.seat`/`.seat-label`); **colonna mosse → `nz-drawer`**.
+- **Convenzioni**: **`<nz-icon>`** (elemento) al posto delle emoji (`provideNzIcons`+`nz-icons.ts`); **classi helper Tailwind** per gli stati; **`ui-hand-result`** component estratto; **tsconfig** modernizzati; **log validazione** sull'attacco.
+- **Regole**: fix estensione scala con matta-incastro (`getCardAbsPos` order-independent) + test; **audit** vs regolamento ufficiale (`rules-audit.spec.ts`).
+
+## ✅ Completato in questa sessione (2026-07-04, 2ª)
+
+- **Core loop mano completo**: `Round.takeDiscardPile()` (raccolta monte, single-writer); **fine partita** (`Game.targetScore` 2005 + `maybeEndGame`/`GameEnded` + overlay "Partita finita"); **Art.14** (rifiuta la chiusura scartando una matta). Test relativi in `round.spec.ts`/`game.spec.ts`.
+- **Sottosistema IA** in `src/app/ai/`: contratto puro `ai-player.ts` (`AiProfile` 12 assi, `GameView`, `AiPlay`, `TableEvent`, `PhraseBank`, memoria a lungo termine); `DefaultAi` (pesca/calate/scarto greedy + memoria episodica/lungo-termine + voce); personalità `sergio`/`maria` (profili + frasi con emoji); registro `personalities.ts`. L'IA NON muta lo stato (single-writer): ritorna decisioni, la Board esegue via Game.
+- **Eventi di gioco fini** nel Round (`RoundEventType`/`gameplayEvents`), broadcastati a tutte le IA (memoria+voce).
+- **Conduttore** nella Board: config posti 0..4 (default 4 IA demo; SUD=`bot`), loop turni autoplay con **velocità** (manuale/lento/medio/veloce, persistita; manuale → tasto AVANTI), delay via `waitStep`, `tweener.whenIdle()`. Voce a fumetto + `aiLog`.
+- **Persistenza**: stato partita salvato e **ripreso al refresh (F5)** (riabilitato `loadFromStorage`; salvataggio sospeso durante replay/player via `Game.suspendHistory`); impostazioni (`burracoz_settings`: velocità, colonna mosse) e memoria IA a lungo termine (`ai_ltm_*`) persistite.
+- **Notazione mosse leggibile** (`move-notation.ts`, stile PGN/PBN in italiano — nessuno standard esiste per il Burraco) con import/export e **player** (avanti/indietro tra i turni) nel pannello debug.
+- **Pannello di debug** (🛠): stato tavolo completo + snapshot memoria IA + log decisioni + salva/carica/modifica stato (`getState`/`restoreState`) + notazione mosse + player.
+- **Layout**: carte più grandi (40×56), giochi come gruppi verticali sviluppati e spaziati (su mobile max 2 righe con offset adattivo via `ResizeObserver`), etichette NORD/EST/SUD/OVEST non sovrapposte, colonna mosse collassabile su desktop, niente scrollbar in animazione, niente overflow su mobile.
+- **Pubblicazione**: repo resa pubblica, GitHub Pages (Actions) + CI su push/PR.
 
 ---
 
 ## 🗺️ Fasi
 
-### Fase 1 — Completare la logica di una partita _(«il gioco funziona davvero»)_
+### Fase 1 — Logica di una partita _(FATTA)_
 
-Obiettivo: una mano completa, punteggiata correttamente, che porta a fine partita.
+- [x] Calcolo punteggio, [x] `takeDiscardPile()`, [x] fine partita, [x] Art.14 (no chiusura con matta), [x] test round/scoring/chiusura/pozzetto.
+- [x] **Undo turno** (Board: snapshot `getState`/`restoreState` per mossa; la pesca dal tallone NON è annullabile).
+- [ ] **Fine tallone** senza chiusura (oggi il turno bot si sospende se non può pescare); caso "unico scarto è una matta" (annullo ultimo gioco).
 
-- [x] **Calcolo punteggio** in `closeRound()` (valori carta, bonus, penalità).
-- [ ] **`takeDiscardPile()`**: raccolta del monte scarti + presa del pozzetto/regola ultima carta; animazione in `Board.willTakeDiscardPile()`.
-- [ ] **Fine partita**: soglia punti configurabile (es. 2000/3000), `Game.endGame()`, evento `GameEnded`, schermata risultato finale.
-- [ ] **Undo turno**: snapshot a inizio turno + ripristino (`undoTurn()`, `canUndoTurn`).
-- [ ] **Chiusura — casi limite** (Art. 14): niente chiusura con scarto matta; caso «unico scarto è una matta».
-- [ ] **Test** su `round.ts` (scoring, chiusura, pozzetto) e classificazione burraco.
+### Fase 2 — Avversari (AI) _(BASE FATTA)_
 
-### Fase 2 — Avversari (AI) _(«giocabile da soli»)_
+- [x] Servizio IA (contratto + `DefaultAi` + personalità), [x] loop turni autoplay, [x] velocità/manuale.
+- [ ] **Potenziare la strategia**: sequenze con asso alto, meld-finder migliore, scarto più intelligente, uso reale di `patience`/`pointGreed`/`cooperation`.
+- [ ] Livelli di difficoltà (preset di profili).
 
-- [ ] Servizio `AiPlayer` con strategia base: pesca, cerca calate/attacchi validi (riusa `Rules`), scarta la carta meno utile.
-- [ ] Loop automatico dei turni non umani in `Game`/`Board` con delay leggibile.
-- [ ] Disattivare `debug`/`playAsEveryone`; nascondere le mani avversarie.
-- [ ] (Opz.) livelli di difficoltà.
+### Fase 3 — UX e struttura app
 
-### Fase 3 — UX e struttura app _(«sembra un prodotto»)_
-
-- [ ] Menu iniziale (Nuova partita / Continua / Regole / Impostazioni) + routing.
-- [ ] Riattivare la **persistenza** (rimuovere il `return;` in `Game.loadFromStorage()`, testare ripresa).
-- [ ] Pulizia UI: rimuovere outline/`debug` di sviluppo, tema tavolo definitivo, feedback errori.
-- [ ] Bottone «riordina» (reset ordinamento manuale → autosort).
-- [ ] **Responsive/mobile** e accessibilità di base.
+- [x] Persistenza (F5), [x] responsive/mobile (no overflow, ≤2 righe giochi), [x] pubblicazione.
+- [x] **Modalità "gioco vero"** via modale Impostazioni: per-posto IA on/off + carte scoperte on/off (default SUD umano+scoperto, resto IA+coperto).
+- [x] **Riordino mano** (drag&drop) + inserimento intelligente delle carte nuove.
+- [ ] Menu iniziale (Nuova partita / Continua / Impostazioni) + routing; selettore personalità.
+- [ ] Pulizia UI residua e tema tavolo definitivo.
 
 ### Fase 4 — Qualità e affidabilità
 
-- [ ] Suite di test completa (round, game, scoring, AI) + CI.
-- [ ] Copertura edge case regolamento FIBUR (`docs/burraco_regole_ufficiali_fibur_2026.txt`).
-- [ ] Migrare l'harness `services/tests.ts` in veri spec; rimuovere codice morto.
+- [x] CI (format+build+test). [ ] copertura test IA + edge case FIBUR; migrare `services/tests.ts`.
 
 ### Fase 5 — Espansione _(opzionale)_
 
-- [ ] **Multiplayer online** (backend + WebSocket) — il salto più grande.
-- [ ] Statistiche/profilo, varianti (2/3/4 giocatori), audio, PWA/deploy.
+- [ ] **Profiler-clone**: osserva lo stile del giocatore e produce un `AiProfile` (inverso dell'IA, riusa gli eventi). [ ] Multiplayer online. [ ] statistiche, varianti, audio, PWA.
 
 ---
 
 ## 🎯 Prossimo passo consigliato
 
-**`takeDiscardPile()`** (Fase 1): completa il core loop del turno ed è l'ultimo tassello per una mano giocabile end-to-end. Da implementare col pattern single-writer (commit diretto in `Round`, il Tweener anima; `faceDown` scritto dal Round — vedi MEMO.md), NON con staging imperativo nella Board. Subito dopo, la **fine partita** per chiudere il ciclo Game.
+**Committare/pubblicare la 3ª sessione** (dopo `yarn format`), poi **potenziare la strategia IA** (Fase 2: scale asso-alto, meld-finder, scarto intelligente, uso di `patience`/`pointGreed`/`cooperation`). Il **profiler-clone** è il grande "nice to have" successivo.
 
 ## 🐞 Debito tecnico noto
 
-- **Baseline non committata**: tutto il lavoro di consolidamento (Tweener v2, single-writer, univocità, scoring, questi .md) è nel working tree; ultimo commit `a4c8ffe`. Committare come punto di ripartenza prima di iniziare Fase 1.
-- Styling da sviluppo: outline colorati, `debug=true`, tratteggio amber sulle carte.
-- `Game.loadFromStorage()` disabilitato (`return;` iniziale) ma l'effect salva comunque → salvataggio autodistrutto al reload.
-- Copertura test: mancano scoring/chiusura/classifyBurraco; harness `services/tests.ts` (casi regole preziosi) da migrare in spec veri.
-- `strictNullChecks:false` in tsconfig; CSS ~790KB per import completo del tema ng-zorro (usati solo button+tag).
+- **3ª sessione non committata**: lavoro nel working tree; committare dopo `yarn format` (gate CI `format:check`).
+- **Strategia IA semplice**: greedy, niente scale con asso alto; `patience`/`pointGreed`/`cooperation` non ancora sfruttati nelle decisioni.
+- **Dimensione carta globale** (`CARD_SIZE` in deck.ts): su mobile con MOLTI giochi non si rimpiccioliscono le carte come fallback (oggi si riduce solo l'offset verticale) → in casi estremi l'area `overflow-hidden` potrebbe clippare oltre le 2 righe.
+- **Deploy Pages transitorio**: lo step `deploy-pages` fallisce spesso con "try again later" (build ok); rilanciare `gh workflow run deploy.yml`.
+- **Ramo asso/`mayBeCleanCanasta`** in `validateRun`: intricato/fragile (passa i test, candidato a semplificazione). fine-tallone mancante; `strictNullChecks:false`; CSS ~790KB (tema ng-zorro completo, usati button/tag/icon/drawer).

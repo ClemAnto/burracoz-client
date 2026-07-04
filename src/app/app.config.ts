@@ -13,6 +13,8 @@ import it from '@angular/common/locales/it';
 import { FormsModule } from '@angular/forms';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideHttpClient } from '@angular/common/http';
+import { provideNzIcons } from 'ng-zorro-antd/icon';
+import { NZ_ICONS } from './nz-icons';
 
 registerLocaleData(it);
 
@@ -22,6 +24,7 @@ export const appConfig: ApplicationConfig = {
 		provideZonelessChangeDetection(),
 		provideRouter(routes),
 		provideNzI18n(it_IT),
+		provideNzIcons(NZ_ICONS),
 		importProvidersFrom(FormsModule),
 		provideAnimationsAsync(),
 		provideHttpClient(),

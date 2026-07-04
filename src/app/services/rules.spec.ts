@@ -108,4 +108,13 @@ describe('Rules', () => {
 		expect(result).not.toBeNull();
 		expect(result!.map((c) => c.toString())).toEqual(['6♥️', '2♥️', '4♥️', '3♥️']);
 	});
+
+	it('extends a stored (descending) run with an incastro wild', () => {
+		// Gioco a terra memorizzato in ordine DECRESCENTE: 10♠ 9♠ [8=2♥] 7♠.
+		// Aggiungere J♠ deve estendere la scala. Regressione: la matta-incastro
+		// veniva collocata al rank sbagliato per l'ordine decrescente → collisione.
+		const result = service.validateMeld('J♠️', '10♠️ 9♠️ 2♥️ 7♠️');
+		expect(result).not.toBeNull();
+		expect(result!.length).toBe(5);
+	});
 });

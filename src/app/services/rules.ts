@@ -324,9 +324,21 @@ export function getCardAbsPos(cardIndex: number, cards: DeckItem[]): number {
 
 	let pos = getCardRank(cardValue, cardValue == 'A' && aceMayBeHigh(DeckItems.fromArray(cards)));
 	if (!pos) {
+		// Matta: la posizione si deduce dal naturale vicino. Il verso dell'array
+		// (rank crescente o decrescente con l'indice) determina il segno: i giochi
+		// a terra sono memorizzati in ordine DECRESCENTE, l'input di gioco è
+		// CRESCENTE. Senza rilevare il verso la matta-incastro finiva alla posizione
+		// sbagliata (es. scala 10♠9♠[8=2♥]7♠ non si estendeva più — collisione a 10).
 		const { card, offset } = getNaturalNear(cards, cardIndex);
-		pos = getCardRank(card.value) - offset;
+		pos = getCardRank(card.value) - rankDirection(cards) * offset;
 	}
 
 	return pos;
+}
+
+/** +1 se i rank crescono con l'indice, -1 se decrescono (dai primi due naturali). */
+function rankDirection(cards: DeckItem[]): number {
+	const ranked = cards.map((c) => getCardRank(c.value)).filter((r) => r > 0);
+	if (ranked.length < 2) return 1;
+	return ranked[1] - ranked[0] >= 0 ? 1 : -1;
 }

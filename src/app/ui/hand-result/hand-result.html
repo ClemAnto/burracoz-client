@@ -1,0 +1,92 @@
+<div class="absolute inset-0 z-40 flex items-center justify-center bg-black/80">
+	<div class="min-w-85 rounded-2xl bg-white p-8 shadow-2xl">
+		@if (gameEnded()) {
+			<h2 class="mb-1 text-center text-2xl font-bold">Partita finita!</h2>
+			<p class="mb-4 text-center text-gray-500">
+				Vince la squadra:
+				<strong>{{ gameWinner() === 'ours' ? 'NOI' : 'AVVERSARI' }}</strong>
+			</p>
+		} @else {
+			<h2 class="mb-1 text-center text-2xl font-bold">Mano chiusa!</h2>
+			<p class="mb-4 text-center text-gray-500">
+				Chiusa da: <strong>{{ winnerLabel() }}</strong>
+			</p>
+		}
+
+		@let s = score();
+		@if (s) {
+			<table class="mb-4 w-full border-collapse text-sm">
+				<thead>
+					<tr class="border-b">
+						<th class="py-1 text-left">Voce</th>
+						<th class="py-1 text-right">NOI</th>
+						<th class="py-1 text-right">AVVERSARI</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td class="py-0.5 text-gray-600">Giochi a terra</td>
+						<td class="text-right">{{ s.ours.breakdown.openMeldPoints }}</td>
+						<td class="text-right">{{ s.opponents.breakdown.openMeldPoints }}</td>
+					</tr>
+					<tr>
+						<td class="py-0.5 text-gray-600">Burraco</td>
+						<td class="text-right text-green-600">
+							+{{ s.ours.breakdown.burracoBonus }}
+						</td>
+						<td class="text-right text-green-600">
+							+{{ s.opponents.breakdown.burracoBonus }}
+						</td>
+					</tr>
+					<tr>
+						<td class="py-0.5 text-gray-600">Chiusura</td>
+						<td class="text-right text-green-600">
+							+{{ s.ours.breakdown.closureBonus }}
+						</td>
+						<td class="text-right text-green-600">
+							+{{ s.opponents.breakdown.closureBonus }}
+						</td>
+					</tr>
+					<tr>
+						<td class="py-0.5 text-gray-600">Carte in mano</td>
+						<td class="text-right text-red-500">
+							-{{ s.ours.breakdown.remainingHandPenalty }}
+						</td>
+						<td class="text-right text-red-500">
+							-{{ s.opponents.breakdown.remainingHandPenalty }}
+						</td>
+					</tr>
+					<tr>
+						<td class="py-0.5 text-gray-600">Pozzetto non preso</td>
+						<td class="text-right text-red-500">
+							-{{ s.ours.breakdown.potNotTakenPenalty }}
+						</td>
+						<td class="text-right text-red-500">
+							-{{ s.opponents.breakdown.potNotTakenPenalty }}
+						</td>
+					</tr>
+					<tr class="border-t font-bold">
+						<td class="pt-1">TOTALE</td>
+						<td class="pt-1 text-right text-lg">{{ s.ours.total }}</td>
+						<td class="pt-1 text-right text-lg">{{ s.opponents.total }}</td>
+					</tr>
+				</tbody>
+			</table>
+
+			<p class="mb-5 text-center text-sm text-gray-400">
+				Cumulato — NOI: <strong>{{ totalScore().ours }}</strong> &nbsp;|&nbsp; AVVERSARI:
+				<strong>{{ totalScore().opponents }}</strong>
+			</p>
+		}
+
+		@if (gameEnded()) {
+			<button nz-button nzType="primary" class="w-full" (click)="newGame.emit()">
+				NUOVA PARTITA
+			</button>
+		} @else {
+			<button nz-button nzType="primary" class="w-full" (click)="nextHand.emit()">
+				NUOVA MANO
+			</button>
+		}
+	</div>
+</div>

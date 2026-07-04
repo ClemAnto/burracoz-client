@@ -3,3 +3,74 @@
 @utility place-content-inherit {
 	place-content: inherit;
 }
+
+/* ── Evidenziazione elementi di gioco (classi helper riusabili) ──────────────
+   Preferite a lunghe condizioni di classi inline nel template: nel markup basta
+   la classe base + un toggle booleano (es. [class.seat--turn]). */
+
+/* Posto giocatore: contorno neutro; evidenziato in verde quando è il suo turno. */
+.seat {
+	@apply rounded-lg outline outline-white/15 transition-all duration-300;
+}
+.seat--turn {
+	@apply bg-green-400/10 outline-2 outline-green-400 shadow-[0_0_16px_2px_rgba(74,222,128,0.55)];
+}
+
+/* Etichetta uniforme del posto, piccola, in alto a sinistra. */
+.seat-label {
+	@apply absolute left-1 top-1 z-20 rounded bg-black/50 px-1 py-0.5 text-[9px] font-bold leading-none tracking-wide text-white/60 select-none;
+}
+.seat--turn .seat-label {
+	@apply bg-green-500 text-white;
+}
+
+/* Pile centrali (tallone/scarti): interattive ed evidenziate al proprio turno. */
+.pile {
+	@apply cursor-default outline outline-white/20 transition-all;
+}
+.pile--pick {
+	@apply animate-pulse cursor-pointer outline-green-400 ring-2 ring-green-400 hover:ring-4;
+}
+.pile--discard {
+	@apply cursor-pointer outline-amber-400 hover:ring-2 hover:ring-amber-400;
+}
+
+.grid-stack {
+	@apply grid;
+}
+
+.grid-stack > * {
+	grid-column: 1/-1;
+	grid-row: 1/-1;
+}
+
+/* Pozzetti: prospettiva CONDIVISA (una sola "camera") così i due dorsi — uno
+   ruotato di 90° — restano coerenti. Ogni carta normalmente crea la propria
+   prospettiva (card.scss): qui la sposto sul contenitore e propago preserve-3d
+   lungo la catena del Deck, così le carte dei pozzetti usano la camera comune
+   invece della loro. Non è "flat": il 3D resta, ma è unico. Scoped ai pozzetti. */
+.pot-3d {
+	perspective: 100px;
+	perspective-origin: center;
+	transform-style: preserve-3d;
+	perspective-origin: -60px 100px;
+}
+.pot-3d ui-deck,
+.pot-3d ui-deck > div,
+.pot-3d .card-pivot {
+	transform-style: preserve-3d;
+}
+.pot-3d ui-card {
+	perspective: none;
+}
+.pot-3d ui-card:has(+ ui-card) {
+	transform: translateZ(6px);
+}
+
+.meld figure {
+	align-items: start;
+}
+
+.meld .card-pivot {
+	margin-bottom: -20px !important;
+}

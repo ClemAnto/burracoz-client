@@ -1,9 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { NzIconService } from 'ng-zorro-antd/icon';
 
 import { Board } from './board';
+import { NZ_ICONS } from '../../nz-icons';
 
 describe('Board', () => {
-	let component: Board;
 	let fixture: ComponentFixture<Board>;
 
 	beforeEach(async () => {
@@ -11,12 +12,17 @@ describe('Board', () => {
 			imports: [Board],
 		}).compileComponents();
 
+		// Registra le icone ng-zorro usate dal template (altrimenti la direttiva
+		// nz-icon tenterebbe un fetch dinamico → 404 async che destabilizza Karma).
+		TestBed.inject(NzIconService).addIcon(...NZ_ICONS);
+
 		fixture = TestBed.createComponent(Board);
-		component = fixture.componentInstance;
 		fixture.detectChanges();
 	});
 
+	afterEach(() => fixture?.destroy());
+
 	it('should create', () => {
-		expect(component).toBeTruthy();
+		expect(fixture.componentInstance).toBeTruthy();
 	});
 });

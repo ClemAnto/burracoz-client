@@ -10,13 +10,15 @@ import {
 	ViewChild,
 } from '@angular/core';
 import { NzButtonModule } from 'ng-zorro-antd/button';
+import { NzDrawerModule } from 'ng-zorro-antd/drawer';
+import { NzIconModule } from 'ng-zorro-antd/icon';
 import { NzTagModule } from 'ng-zorro-antd/tag';
 import { AiLongTermMemory, AiPlayer, GameView, TableEvent } from '../../ai/ai-player';
 import { createAi } from '../../ai/personalities';
-import { DeckItem } from '../../services/cards';
+import { DeckItem, getCardRank } from '../../services/cards';
 import { Game, GameEvent, GameEventType } from '../../services/game';
 import { LocalStorage } from '../../services/local-storage';
-import { Rules } from '../../services/rules';
+import { Rules, isWild } from '../../services/rules';
 import {
 	DealResult,
 	PlayerSide,
@@ -39,6 +41,7 @@ import {
 	splitTurns,
 } from '../../services/move-notation';
 import { Deck } from '../deck/deck';
+import { HandResult } from '../hand-result/hand-result';
 import { Tweener } from '../tweener/tweener';
 
 /** Velocità delle mosse IA. 'manual' = un passo per ogni "AVANTI". */
@@ -46,7 +49,17 @@ export type AiSpeed = 'manual' | 'slow' | 'medium' | 'fast';
 
 @Component({
 	selector: 'ui-board',
-	imports: [NzButtonModule, NzTagModule, Deck, Tweener, UpperCasePipe, NgClass],
+	imports: [
+		NzButtonModule,
+		NzDrawerModule,
+		NzIconModule,
+		NzTagModule,
+		Deck,
+		HandResult,
+		Tweener,
+		UpperCasePipe,
+		NgClass,
+	],
 	templateUrl: './board.html',
 	host: {
 		class: 'flex flex-col flex-1 min-h-0 w-full relative overflow-hidden',
@@ -81,16 +94,30 @@ export class Board implements AfterViewInit {
 	};
 
 	/**
-	 * Configurazione dei posti: null = umano, altrimenti l'IA che lo gioca.
-	 * Numero di IA arbitrario 0..4. Config attuale: 4 IA (demo autonoma).
-	 * Per giocare come umano: `[PlayerSide.South]: null`.
+	 * Istanza IA che presidia ciascun posto (personalità fissa per posto): esiste
+	 * sempre, così la memoria e la personalità sopravvivono all'attivazione/disattivazione.
+	 * Se il posto è "umano" (vedi `aiEnabled`) l'istanza resta ma non gioca.
 	 */
-	seats: Record<PlayerSide, AiPlayer | null> = {
+	private readonly seatAi: Record<PlayerSide, AiPlayer> = {
 		[PlayerSide.South]: createAi('bot'),
 		[PlayerSide.North]: createAi('maria'),
 		[PlayerSide.East]: createAi('sergio'),
 		[PlayerSide.West]: createAi('maria'),
 	};
+
+	/** Posto giocato dall'IA (true) o da un umano (false). Persistito.
+	 *  Default "gioco vero": SUD umano, gli altri tre IA. */
+	aiEnabled = signal<Record<PlayerSide, boolean>>({
+		[PlayerSide.South]: false,
+		[PlayerSide.North]: true,
+		[PlayerSide.East]: true,
+		[PlayerSide.West]: true,
+	});
+
+	/** IA che gioca il posto, oppure null se il posto è umano. */
+	aiAt(player: PlayerSide): AiPlayer | null {
+		return this.aiEnabled()[player] ? this.seatAi[player] : null;
+	}
 
 	/** Ultima battuta pronunciata da un'IA (per il fumetto a schermo). */
 	aiSpeech = signal<{ player: PlayerSide; text: string } | null>(null);
@@ -109,8 +136,8 @@ export class Board implements AfterViewInit {
 	private moveLog = signal<RoundGameplayEvent[]>([]);
 	private moveSetup: RoundSavedState | null = null;
 	moveNotationText = signal('');
-	/** Colonna mosse desktop aperta/chiusa (persistita). */
-	moveListOpen = signal(true);
+	/** Drawer delle mosse aperto/chiuso (persistito). */
+	moveListOpen = signal(false);
 	/** Righe leggibili delle mosse della mano corrente (per la colonna desktop). */
 	moveLines = computed(() => formatMoveLog(this.moveLog()));
 	/** Player: turni caricati + deal (null = player non attivo). */
@@ -123,7 +150,7 @@ export class Board implements AfterViewInit {
 	private aiScheduled = false;
 
 	/** Velocità delle mosse IA (persistita). 'manual' = avanzamento con "AVANTI". */
-	aiSpeed = signal<AiSpeed>('medium');
+	aiSpeed = signal<AiSpeed>('slow');
 	/** True quando una mossa IA è in attesa di "AVANTI" (modalità manuale). */
 	stepPending = signal(false);
 	private stepResolver: (() => void) | null = null;
@@ -134,9 +161,24 @@ export class Board implements AfterViewInit {
 		{ value: 'fast', label: 'Veloce' },
 	] as const;
 
-	// Modalità debug: tutte le mani scoperte (true = carte visibili per tutti)
-	debug = signal(true);
-	playAsEveryone = computed(() => this.debug());
+	/** Carte scoperte per posto (true = mano visibile). Persistito.
+	 *  Default "gioco vero": vedo solo la mia mano (SUD). */
+	faceUp = signal<Record<PlayerSide, boolean>>({
+		[PlayerSide.South]: true,
+		[PlayerSide.North]: false,
+		[PlayerSide.East]: false,
+		[PlayerSide.West]: false,
+	});
+
+	/** Modale impostazioni aperta/chiusa. */
+	settingsOpen = signal(false);
+	/** Ordine dei posti nella modale impostazioni. */
+	readonly SEATS = [
+		PlayerSide.South,
+		PlayerSide.East,
+		PlayerSide.North,
+		PlayerSide.West,
+	] as const;
 
 	// Log [tween] + audit di univocità: separato dal debug delle mani perché i
 	// console.log per-batch costano durante le animazioni di massa (deal).
@@ -215,10 +257,10 @@ export class Board implements AfterViewInit {
 		return Math.max(12, Math.min(26, Math.floor((rowH - 18) / len)));
 	});
 
-	/** True quando tocca a un posto UMANO (seats[player] === null). */
+	/** True quando tocca a un posto UMANO (nessuna IA sul posto). */
 	isHumanTurn = computed(() => {
 		const player = this.currentPlayer();
-		return !!player && this.seats[player] === null;
+		return !!player && !this.aiAt(player);
 	});
 
 	canDraw = computed(
@@ -235,8 +277,22 @@ export class Board implements AfterViewInit {
 			this.isHumanTurn(),
 	);
 
-	canUndo = computed(() => false);
+	/**
+	 * Stack di snapshot per annullare le mosse del turno umano. Ogni azione
+	 * annullabile (prendi scarti, cala, appoggia) vi salva lo stato PRECEDENTE;
+	 * la pesca dal tallone NON è annullabile (svelerebbe la carta) e azzera lo stack.
+	 */
+	private undoStack = signal<{ state: RoundSavedState; moveLogLen: number }[]>([]);
+	canUndo = computed(
+		() =>
+			this.isHumanTurn() &&
+			this.roundPhase() === RoundPhase.InProgress &&
+			this.undoStack().length > 0,
+	);
 	isHandClosed = computed(() => this.roundPhase() === RoundPhase.Closed);
+
+	/** Il monte scarti è interattivo al turno umano: prende (fase pesca) o riceve lo scarto (fase gioca). */
+	discardPileActive = computed(() => this.canDraw() || this.canPlay());
 
 	roundPhase = this.game.roundPhase;
 
@@ -248,16 +304,24 @@ export class Board implements AfterViewInit {
 	private busy = false;
 
 	constructor() {
-		// Impostazioni persistite (es. velocità IA): carica all'avvio, salva a ogni cambio.
-		const settings = this.storage.get<{ aiSpeed?: AiSpeed; moveListOpen?: boolean }>(
-			'burracoz_settings',
-		);
+		// Impostazioni persistite (velocità IA, posti IA/umani, carte scoperte):
+		// carica all'avvio (merge sui default per tollerare stati parziali), salva a ogni cambio.
+		const settings = this.storage.get<{
+			aiSpeed?: AiSpeed;
+			moveListOpen?: boolean;
+			aiEnabled?: Record<PlayerSide, boolean>;
+			faceUp?: Record<PlayerSide, boolean>;
+		}>('burracoz_settings');
 		if (settings?.aiSpeed) this.aiSpeed.set(settings.aiSpeed);
 		if (settings?.moveListOpen !== undefined) this.moveListOpen.set(settings.moveListOpen);
+		if (settings?.aiEnabled) this.aiEnabled.set({ ...this.aiEnabled(), ...settings.aiEnabled });
+		if (settings?.faceUp) this.faceUp.set({ ...this.faceUp(), ...settings.faceUp });
 		effect(() =>
 			this.storage.set('burracoz_settings', {
 				aiSpeed: this.aiSpeed(),
 				moveListOpen: this.moveListOpen(),
+				aiEnabled: this.aiEnabled(),
+				faceUp: this.faceUp(),
 			}),
 		);
 
@@ -274,6 +338,7 @@ export class Board implements AfterViewInit {
 			this.currentPlayer();
 			this.turnStep();
 			this.roundPhase();
+			this.aiEnabled(); // riattivare l'IA sul posto di turno la fa partire subito
 			this.maybeRunAiTurn();
 		});
 
@@ -284,15 +349,32 @@ export class Board implements AfterViewInit {
 	}
 
 	attachToMeld(meldIndex: number) {
-		const deck = this.playerDecks[this.currentPlayer()];
+		const player = this.currentPlayer();
+		const deck = this.playerDecks[player];
 		if (!deck) return;
 		// Istanze, non tag: nel mazzo doppio il tag è ambiguo (due copie identiche)
 		// e il Round rimuoverebbe potenzialmente la copia sbagliata dalla mano.
 		const cards = deck.selecteds();
 		if (!cards.length) return;
-		this.game.attachToMeld(meldIndex, cards);
+
+		// Log della validazione del gioco risultante (carte + gioco a terra).
+		const team = TEAM_BY_PLAYER[player];
+		const target = this.game.melds()[team][meldIndex] ?? [];
+		const validated = this.rules.validateMeld(cards, target);
+		console.log(
+			`%c[attacco] ${player} → gioco ${meldIndex}: ` +
+				`${cards.map((c) => c.tag).join(' ')} + [${target.map((c) => c.tag).join(' ')}] ⇒ ` +
+				(validated ? `VALIDO (${validated.map((c) => c.tag).join(' ')})` : 'NON VALIDO'),
+			`color:${validated ? '#4ade80' : '#f87171'};font-weight:bold`,
+		);
+
+		const snapshot = this.undoSnapshot();
+		// `game.attachToMeld` è l'autorità: rivalida e, se ok, procede (altrimenti lastError).
+		if (!this.game.attachToMeld(meldIndex, cards)) return;
+		this.pushUndo(snapshot);
 		deck.selecteds.set([]);
-		deck.autosortNow();
+		// Le carte calate escono dalla mano; `list()` mantiene l'ordine delle
+		// rimanenti. Niente riordino: l'ordine è del giocatore (drag & drop).
 	}
 
 	addMeld() {
@@ -300,25 +382,57 @@ export class Board implements AfterViewInit {
 		if (!deck) return;
 		const cards = deck.selecteds();
 		if (!cards.length) return;
-		this.game.openMeld(cards);
+		const snapshot = this.undoSnapshot();
+		if (!this.game.openMeld(cards)) return;
+		this.pushUndo(snapshot);
 		deck.selecteds.set([]);
-		deck.autosortNow();
+	}
+
+	/** Cattura lo stato corrente (Round + lunghezza log mosse) per un eventuale undo. */
+	private undoSnapshot(): { state: RoundSavedState; moveLogLen: number } {
+		return { state: this.round.getState(), moveLogLen: this.moveLog().length };
+	}
+
+	private pushUndo(snapshot: { state: RoundSavedState; moveLogLen: number }): void {
+		this.undoStack.update((stack) => [...stack, snapshot]);
+	}
+
+	/** Annulla l'ultima mossa annullabile del turno, ripristinando lo stato salvato. */
+	undoTurn(): void {
+		if (this.busy) return;
+		const stack = this.undoStack();
+		if (!stack.length) return;
+		const { state, moveLogLen } = stack[stack.length - 1];
+		this.undoStack.set(stack.slice(0, -1));
+		this.round.restoreState(state);
+		// Riallinea la notazione mosse; le istanze sono nuove → azzera le selezioni.
+		this.moveLog.update((log) => log.slice(0, moveLogLen));
+		this.playerDecks[this.currentPlayer()]?.selecteds.set([]);
+	}
+
+	/** Click sul monte scarti: prende il monte (fase pesca) o scarta la carta selezionata (fase gioca). */
+	onDiscardPileClick(): void {
+		if (this.canDraw()) this.willTakeDiscardPile();
+		else if (this.canPlay()) this.discard();
 	}
 
 	async willTakeFromDrawPile() {
 		if (this.busy) return;
 		if (!this.game.drawPile().length) return;
 		const player = this.currentPlayer();
+		const before = this.handUids(player);
 
 		this.busy = true;
 		try {
 			// Commit diretto: i signal del Round spostano la carta e il FLIP
 			// dello scope anima da solo il volo tallone → mano.
 			if (!this.game.drawFromStock()) return;
+			// La pesca dal tallone svela una carta coperta: non è annullabile.
+			this.undoStack.set([]);
 
 			await this.tweener.whenIdle();
-			// Riordino solo ora, a pesca (animazione) conclusa.
-			this.playerDecks[player]?.autosortNow();
+			// Sistema le carte appena arrivate (inserimento intelligente se umano).
+			this.arrangeIncoming(player, before);
 		} finally {
 			this.busy = false;
 		}
@@ -328,16 +442,20 @@ export class Board implements AfterViewInit {
 		if (this.busy) return;
 		if (!this.game.discardPile().length) return;
 		const player = this.currentPlayer();
+		const before = this.handUids(player);
+		// Prendere il monte è annullabile (info pubblica): salva lo stato precedente.
+		const snapshot = this.undoSnapshot();
 
 		this.busy = true;
 		try {
 			// Commit diretto: i signal del Round spostano l'intero monte in mano
 			// e il FLIP dello scope anima da solo il volo scarti → mano.
 			if (!this.game.takeDiscardPile()) return;
+			this.pushUndo(snapshot);
 
 			await this.tweener.whenIdle();
-			// Riordino solo ora, a raccolta (animazione) conclusa.
-			this.playerDecks[player]?.autosortNow();
+			// Sistema le carte raccolte (inserimento intelligente se umano).
+			this.arrangeIncoming(player, before);
 		} finally {
 			this.busy = false;
 		}
@@ -438,11 +556,98 @@ export class Board implements AfterViewInit {
 		}
 	}
 
-	/** Riordina tutte le mani per seme→rank (da chiamare a animazioni concluse). */
+	/** Riordina tutte le mani per seme→rank (sort iniziale, a distribuzione conclusa). */
 	private sortHands() {
 		for (const p of [PlayerSide.North, PlayerSide.East, PlayerSide.South, PlayerSide.West]) {
 			this.playerDecks[p]?.autosortNow();
 		}
+	}
+
+	/** uid delle carte attualmente in mano al posto. */
+	private handUids(player: RoundPlayer): Set<number> {
+		return new Set(this.game.hands()[player].map((c) => c.uid));
+	}
+
+	/** Vero se il posto è giocato da un umano (che riordina la propria mano). */
+	private isHuman(player: RoundPlayer): boolean {
+		return !this.aiAt(player);
+	}
+
+	/**
+	 * Sistema le carte appena entrate in mano (pesca, presa da terra, pozzetto).
+	 * Umano: NON si riordina tutta la mano (l'ordine è del giocatore, drag & drop),
+	 * le nuove carte si inseriscono in modo intelligente. IA: autosort completo.
+	 * @param before uid delle carte PRIMA dell'azione (le nuove sono quelle assenti).
+	 */
+	private arrangeIncoming(player: RoundPlayer, before: Set<number>): void {
+		const deck = this.playerDecks[player];
+		if (!deck) return;
+		if (!this.isHuman(player)) {
+			deck.autosortNow();
+			return;
+		}
+		const incoming = this.game.hands()[player].filter((c) => !before.has(c.uid));
+		if (incoming.length) this.smartArrangeHand(player, incoming);
+	}
+
+	/**
+	 * Inserisce le carte `incoming` nell'ordine manuale della mano: se una carta
+	 * forma un potenziale gioco con carte già in mano (set: stesso valore; scala:
+	 * stesso seme in sequenza) la mette accanto ad esse, altrimenti in fondo.
+	 * Le carte già presenti mantengono l'ordine scelto dal giocatore.
+	 */
+	private smartArrangeHand(player: RoundPlayer, incoming: DeckItem[]): void {
+		const deck = this.playerDecks[player];
+		if (!deck) return;
+		const hand = this.game.hands()[player];
+		const byUid = new Map(hand.map((c) => [c.uid, c] as const));
+		const isIncoming = new Set(incoming.map((c) => c.uid));
+		// Base = ordine manuale corrente (solo carte ancora in mano, escluse le nuove).
+		const baseOrder = (deck.manualOrder() ?? hand.map((c) => c.uid)).filter(
+			(uid) => byUid.has(uid) && !isIncoming.has(uid),
+		);
+		const arranged = baseOrder.map((uid) => byUid.get(uid)!);
+		for (const card of incoming) {
+			const idx = this.smartInsertIndex(card, arranged);
+			if (idx < 0) arranged.push(card);
+			else arranged.splice(idx, 0, card);
+		}
+		deck.manualOrder.set(arranged.map((c) => c.uid));
+	}
+
+	/**
+	 * Posizione in cui inserire `card` fra le carte `hand` per affiancarla a un
+	 * potenziale gioco valido; -1 se non c'è (→ va in fondo).
+	 */
+	private smartInsertIndex(card: DeckItem, hand: DeckItem[]): number {
+		if (isWild(card)) return -1; // le matte non guidano l'inserimento → in fondo
+		// SET: almeno 2 carte dello stesso valore già in mano → potenziale tris.
+		const sameValue = hand
+			.map((c, i) => [c, i] as const)
+			.filter(([c]) => !isWild(c) && c.value === card.value);
+		if (sameValue.length >= 2) {
+			return sameValue[sameValue.length - 1][1] + 1;
+		}
+		// SCALA: stesso seme, la carta estende una sequenza (≥2 consecutivi con essa).
+		const rank = getCardRank(card.value);
+		const suitRanks = hand
+			.filter((c) => !isWild(c) && c.suit === card.suit)
+			.map((c) => getCardRank(c.value));
+		const has = (r: number) => suitRanks.includes(r);
+		const extendsRun =
+			(has(rank - 1) && has(rank - 2)) ||
+			(has(rank - 1) && has(rank + 1)) ||
+			(has(rank + 1) && has(rank + 2));
+		if (extendsRun) {
+			const before = hand.findIndex(
+				(c) => !isWild(c) && c.suit === card.suit && getCardRank(c.value) > rank,
+			);
+			if (before >= 0) return before;
+			for (let i = hand.length - 1; i >= 0; i--) {
+				if (hand[i].suit === card.suit && !isWild(hand[i])) return i + 1;
+			}
+		}
+		return -1;
 	}
 
 	async resetGame() {
@@ -456,8 +661,6 @@ export class Board implements AfterViewInit {
 		if (gen === this.resetGen) this.animate.set(true);
 	}
 
-	undoTurn() {}
-
 	async discard() {
 		if (this.busy) return;
 		const player = this.currentPlayer();
@@ -465,6 +668,7 @@ export class Board implements AfterViewInit {
 		if (!deck) return;
 		const [card] = deck.selecteds();
 		if (!card) return;
+		const before = this.handUids(player);
 
 		this.busy = true;
 		try {
@@ -473,11 +677,14 @@ export class Board implements AfterViewInit {
 			// Commit diretto: il Round scopre la carta e la sposta negli scarti,
 			// il FLIP dello scope anima da solo il volo mano → scarti.
 			if (!this.game.discard(card)) return;
+			// Lo scarto chiude il turno: non c'è più nulla da annullare.
+			this.undoStack.set([]);
 			deck.selecteds.update((s) => s.filter((c) => c.uid !== card.uid));
 
 			await this.tweener.whenIdle();
-			// Riordino della mano di chi ha giocato (copre l'eventuale presa del pozzetto).
-			deck.autosortNow();
+			// Se lo scarto ha svuotato la mano e preso il pozzetto, sistema le carte
+			// entrate (inserimento intelligente se umano; autosort per l'IA).
+			this.arrangeIncoming(player, before);
 		} finally {
 			this.busy = false;
 		}
@@ -512,7 +719,7 @@ export class Board implements AfterViewInit {
 		if (this.aiScheduled || this.busy || !this.viewReady || this.replaying || this.playback())
 			return;
 		const player = this.currentPlayer();
-		if (!player || !this.seats[player]) return;
+		if (!player || !this.aiAt(player)) return;
 		if (this.roundPhase() !== RoundPhase.InProgress) return;
 		// setTimeout(0) esce dall'effect (i signal write avvengono fuori dal contesto
 		// reattivo); il ritmo vero è dentro runAiTurn (waitStep). Nessun filtro sulla
@@ -569,7 +776,7 @@ export class Board implements AfterViewInit {
 		if (this.busy) return;
 		const player = this.currentPlayer();
 		if (!player) return;
-		const ai = this.seats[player];
+		const ai = this.aiAt(player);
 		if (!ai) return;
 		if (this.roundPhase() !== RoundPhase.InProgress) return;
 
@@ -689,7 +896,7 @@ export class Board implements AfterViewInit {
 
 	private broadcast(event: TableEvent): void {
 		for (const seat of ALL_SEATS) {
-			const ai = this.seats[seat];
+			const ai = this.aiAt(seat);
 			if (!ai) continue;
 			const view = this.buildView(seat);
 			ai.observe(event, view);
@@ -700,7 +907,7 @@ export class Board implements AfterViewInit {
 
 	private broadcastSystem(kind: TableEvent['kind']): void {
 		for (const seat of ALL_SEATS) {
-			const ai = this.seats[seat];
+			const ai = this.aiAt(seat);
 			if (!ai) continue;
 			const event: TableEvent = { kind, actor: seat };
 			const view = this.buildView(seat);
@@ -758,17 +965,17 @@ export class Board implements AfterViewInit {
 	// ---- Persistenza memoria a lungo termine (apprendimento tra partite) ----
 
 	private loadAiMemories(): void {
+		// Sempre su tutte le istanze (anche posti umani): la memoria per posizione
+		// non va persa se un posto viene disattivato e poi riattivato.
 		for (const seat of ALL_SEATS) {
-			const ai = this.seats[seat];
-			if (!ai) continue;
+			const ai = this.seatAi[seat];
 			ai.loadLongTermMemory(this.storage.get<AiLongTermMemory>('ai_ltm_' + seat) ?? null);
 		}
 	}
 
 	private saveAiMemories(): void {
 		for (const seat of ALL_SEATS) {
-			const ai = this.seats[seat];
-			if (!ai) continue;
+			const ai = this.seatAi[seat];
 			this.storage.set('ai_ltm_' + seat, ai.exportLongTermMemory());
 		}
 	}
@@ -780,6 +987,20 @@ export class Board implements AfterViewInit {
 	toggleDebugPanel(): void {
 		this.debugPanelOpen.update((v) => !v);
 		if (this.debugPanelOpen()) this.captureState();
+	}
+
+	// ---- Modale impostazioni (velocità IA, posti IA/umano, carte scoperte) ----
+
+	toggleSettings(): void {
+		this.settingsOpen.update((v) => !v);
+	}
+
+	setSeatAi(player: PlayerSide, enabled: boolean): void {
+		this.aiEnabled.update((m) => ({ ...m, [player]: enabled }));
+	}
+
+	setSeatFaceUp(player: PlayerSide, up: boolean): void {
+		this.faceUp.update((m) => ({ ...m, [player]: up }));
 	}
 
 	/** Apre/chiude la colonna mosse (solo desktop). */
@@ -873,12 +1094,12 @@ export class Board implements AfterViewInit {
 
 	/** Snapshot della memoria dell'IA di un posto (null se umano). */
 	aiMemoryOf(player: PlayerSide) {
-		return this.seats[player]?.memorySnapshot() ?? null;
+		return this.aiAt(player)?.memorySnapshot() ?? null;
 	}
 
 	/** Nome dell'IA di un posto (o "umano"). */
 	aiNameOf(player: PlayerSide): string {
-		return this.seats[player]?.name ?? 'umano';
+		return this.aiAt(player)?.name ?? 'umano';
 	}
 
 	// ============================================================
