@@ -86,12 +86,12 @@ export function encodeMoveList(
 	lines.push('[Tallone "' + tagStr(setup.drawPile) + '"]');
 	lines.push('[Scarto "' + tagStr(setup.discardPile) + '"]');
 	lines.push('');
-	lines.push(...encodeMoves(events));
+	lines.push(...formatMoveLog(events));
 	return lines.join('\n');
 }
 
 /** Raggruppa gli eventi in righe-turno leggibili (pesca → giochi → scarto). */
-function encodeMoves(events: RoundGameplayEvent[]): string[] {
+export function formatMoveLog(events: RoundGameplayEvent[]): string[] {
 	const lines: string[] = [];
 	const tags = (cards?: { tag: string }[]) => (cards ?? []).map((c) => c.tag).join(' ');
 	let turn = 0;

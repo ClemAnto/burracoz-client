@@ -32,6 +32,7 @@ import {
 	decodeMoveList,
 	describeTurn,
 	encodeMoveList,
+	formatMoveLog,
 	ReplayMove,
 	splitTurns,
 } from '../../services/move-notation';
@@ -105,6 +106,10 @@ export class Board implements AfterViewInit {
 	private moveLog = signal<RoundGameplayEvent[]>([]);
 	private moveSetup: RoundSavedState | null = null;
 	moveNotationText = signal('');
+	/** Colonna mosse desktop aperta/chiusa (persistita). */
+	moveListOpen = signal(true);
+	/** Righe leggibili delle mosse della mano corrente (per la colonna desktop). */
+	moveLines = computed(() => formatMoveLog(this.moveLog()));
 	/** Player: turni caricati + deal (null = player non attivo). */
 	playback = signal<{ setup: RoundSavedState; turns: ReplayMove[][] } | null>(null);
 	playbackTurn = signal(0);
@@ -203,9 +208,17 @@ export class Board implements AfterViewInit {
 
 	constructor() {
 		// Impostazioni persistite (es. velocità IA): carica all'avvio, salva a ogni cambio.
-		const settings = this.storage.get<{ aiSpeed?: AiSpeed }>('burracoz_settings');
+		const settings = this.storage.get<{ aiSpeed?: AiSpeed; moveListOpen?: boolean }>(
+			'burracoz_settings',
+		);
 		if (settings?.aiSpeed) this.aiSpeed.set(settings.aiSpeed);
-		effect(() => this.storage.set('burracoz_settings', { aiSpeed: this.aiSpeed() }));
+		if (settings?.moveListOpen !== undefined) this.moveListOpen.set(settings.moveListOpen);
+		effect(() =>
+			this.storage.set('burracoz_settings', {
+				aiSpeed: this.aiSpeed(),
+				moveListOpen: this.moveListOpen(),
+			}),
+		);
 
 		// Loop dei turni: quando tocca a un posto IA, il conduttore esegue il turno.
 		effect(() => {
@@ -711,6 +724,11 @@ export class Board implements AfterViewInit {
 	toggleDebugPanel(): void {
 		this.debugPanelOpen.update((v) => !v);
 		if (this.debugPanelOpen()) this.captureState();
+	}
+
+	/** Apre/chiude la colonna mosse (solo desktop). */
+	toggleMoveList(): void {
+		this.moveListOpen.update((v) => !v);
 	}
 
 	/** Cattura lo stato corrente del tavolo nell'editor. */

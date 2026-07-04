@@ -175,262 +175,293 @@
   TAVOLO DI GIOCO — layout fisso per tutti e 4 i giocatori
   Il contorno verde evidenzia il giocatore di turno
 ============================================================ -->
-<div
-	class="flex flex-col gap-3 p-2 max-w-full grow overflow-hidden isolate"
-	uiTweenScope
-	#tweener="uiTweenScope"
-	[disabled]="!animate()"
-	[debug]="tweenDebug()"
->
-	<!-- NORD (in alto) -->
-	<header
-		class="flex w-full shrink-0 items-center gap-2 rounded-lg px-1 outline transition-all duration-300"
-		[ngClass]="
-			currentPlayer() === PlayerSide.North
-				? 'outline-2 outline-green-400 bg-green-400/10 shadow-[0_0_16px_2px_rgba(74,222,128,0.55)]'
-				: 'outline-white/15'
-		"
+<div class="flex grow min-h-0 gap-2">
+	<div
+		class="relative flex flex-col gap-3 p-2 max-w-full min-w-0 grow overflow-hidden isolate"
+		uiTweenScope
+		#tweener="uiTweenScope"
+		[disabled]="!animate()"
+		[debug]="tweenDebug()"
 	>
-		<span
-			class="z-10 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider select-none transition-colors duration-300"
+		<!-- NORD (in alto) -->
+		<header
+			class="flex w-full shrink-0 items-center gap-2 rounded-lg px-1 outline transition-all duration-300"
 			[ngClass]="
 				currentPlayer() === PlayerSide.North
-					? 'bg-green-500 text-white animate-pulse'
-					: 'bg-black/40 text-white/50'
-			"
-			>NORD</span
-		>
-		<ui-deck
-			#northDeck
-			[animate]="animate()"
-			[cards]="northCards()"
-			[faceDown]="debug() ? false : true"
-			[selectable]="
-				currentPlayer() === PlayerSide.North && turnStep() === RoundTurnStep.PlayAndDiscard
-			"
-			class="z-3 grow place-content-center"
-		/>
-	</header>
-
-	<!-- MELDS: Est | Giochi NORD+SUD | Giochi EST+OVEST | Ovest -->
-	<section
-		class="grid min-h-0 grow grid-cols-[26px_1fr_1fr_26px] gap-2 sm:grid-cols-[44px_1fr_1fr_44px] sm:gap-4"
-	>
-		<!-- EST (colonna sinistra) -->
-		<div
-			id="east-col"
-			class="flex flex-col rounded-lg outline transition-all duration-300"
-			[ngClass]="
-				currentPlayer() === PlayerSide.East
 					? 'outline-2 outline-green-400 bg-green-400/10 shadow-[0_0_16px_2px_rgba(74,222,128,0.55)]'
 					: 'outline-white/15'
 			"
 		>
 			<span
-				class="z-10 shrink-0 rounded py-0.5 text-center text-[9px] font-bold tracking-wider select-none transition-colors duration-300"
+				class="z-10 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider select-none transition-colors duration-300"
 				[ngClass]="
-					currentPlayer() === PlayerSide.East
+					currentPlayer() === PlayerSide.North
 						? 'bg-green-500 text-white animate-pulse'
 						: 'bg-black/40 text-white/50'
 				"
-				>EST</span
+				>NORD</span
 			>
-			<div class="relative grow">
-				<ui-deck
-					#eastDeck
-					[animate]="animate()"
-					class="absolute h-full w-full place-content-center"
-					layout="vertical"
-					[gap]="-10"
-					[rotate]="90"
-					[cards]="eastCards()"
-					[faceDown]="debug() ? false : true"
-					[selectable]="
-						currentPlayer() === PlayerSide.East &&
-						turnStep() === RoundTurnStep.PlayAndDiscard
-					"
-				/>
-			</div>
-		</div>
+			<ui-deck
+				#northDeck
+				[animate]="animate()"
+				[cards]="northCards()"
+				[faceDown]="debug() ? false : true"
+				[selectable]="
+					currentPlayer() === PlayerSide.North &&
+					turnStep() === RoundTurnStep.PlayAndDiscard
+				"
+				class="z-3 grow place-content-center"
+			/>
+		</header>
 
-		<!-- Giochi della squadra NORD+SUD (ourMelds).
+		<!-- MELDS: Est | Giochi NORD+SUD | Giochi EST+OVEST | Ovest -->
+		<section
+			class="grid min-h-0 grow grid-cols-[26px_1fr_1fr_26px] gap-2 sm:grid-cols-[44px_1fr_1fr_44px] sm:gap-4"
+		>
+			<!-- EST (colonna sinistra) -->
+			<div
+				id="east-col"
+				class="flex flex-col rounded-lg outline transition-all duration-300"
+				[ngClass]="
+					currentPlayer() === PlayerSide.East
+						? 'outline-2 outline-green-400 bg-green-400/10 shadow-[0_0_16px_2px_rgba(74,222,128,0.55)]'
+						: 'outline-white/15'
+				"
+			>
+				<span
+					class="z-10 shrink-0 rounded py-0.5 text-center text-[9px] font-bold tracking-wider select-none transition-colors duration-300"
+					[ngClass]="
+						currentPlayer() === PlayerSide.East
+							? 'bg-green-500 text-white animate-pulse'
+							: 'bg-black/40 text-white/50'
+					"
+					>EST</span
+				>
+				<div class="relative grow">
+					<ui-deck
+						#eastDeck
+						[animate]="animate()"
+						class="absolute h-full w-full place-content-center"
+						layout="vertical"
+						[gap]="-10"
+						[rotate]="90"
+						[cards]="eastCards()"
+						[faceDown]="debug() ? false : true"
+						[selectable]="
+							currentPlayer() === PlayerSide.East &&
+							turnStep() === RoundTurnStep.PlayAndDiscard
+						"
+					/>
+				</div>
+			</div>
+
+			<!-- Giochi della squadra NORD+SUD (ourMelds).
 			     Click sul container = nuova calata.
 			     Click sul singolo gioco = attacco a quel gioco.
 			     Interattivo solo quando è il turno di nord o sud. -->
-		<div
-			class="flex min-h-0 flex-row flex-wrap content-start items-start gap-3 overflow-hidden rounded-lg p-1 outline outline-blue-300 transition-all"
-			[class.ring-2]="ourZoneActive()"
-			[class.ring-blue-400]="ourZoneActive()"
-			[class.cursor-pointer]="ourZoneActive()"
-			(click)="ourZoneActive() && addMeld()"
-		>
-			<span class="w-full px-1 text-xs text-blue-400">NOI</span>
-			@for (meld of ourMeldsData(); track $index) {
-				<ui-deck
-					[style.--z]="$index + 4"
-					[style.height.px]="meld.length * 26 + 16"
-					class="relative z-(--z) shrink-0"
-					layout="vertical"
-					[gap]="-10"
-					[ngClass]="
-						ourZoneActive()
-							? 'cursor-pointer hover:ring-2 hover:ring-blue-500 rounded'
-							: ''
-					"
-					[cards]="meld"
-					[selectable]="false"
-					(click)="ourZoneActive() && attachToMeld($index); $event.stopPropagation()"
-				/>
-			}
-		</div>
+			<div
+				class="flex min-h-0 flex-row flex-wrap content-start items-start gap-3 overflow-hidden rounded-lg p-1 outline outline-blue-300 transition-all"
+				[class.ring-2]="ourZoneActive()"
+				[class.ring-blue-400]="ourZoneActive()"
+				[class.cursor-pointer]="ourZoneActive()"
+				(click)="ourZoneActive() && addMeld()"
+			>
+				<span class="w-full px-1 text-xs text-blue-400">NOI</span>
+				@for (meld of ourMeldsData(); track $index) {
+					<ui-deck
+						[style.--z]="$index + 4"
+						[style.height.px]="meld.length * 26 + 16"
+						class="relative z-(--z) shrink-0"
+						layout="vertical"
+						[gap]="-10"
+						[ngClass]="
+							ourZoneActive()
+								? 'cursor-pointer hover:ring-2 hover:ring-blue-500 rounded'
+								: ''
+						"
+						[cards]="meld"
+						[selectable]="false"
+						(click)="ourZoneActive() && attachToMeld($index); $event.stopPropagation()"
+					/>
+				}
+			</div>
 
-		<!-- Giochi della squadra EST+OVEST (theirMelds).
+			<!-- Giochi della squadra EST+OVEST (theirMelds).
 			     Interattivo solo quando è il turno di est o ovest. -->
-		<div
-			class="flex min-h-0 flex-row flex-wrap content-start items-start gap-3 overflow-hidden rounded-lg p-1 outline outline-red-300 transition-all"
-			[class.ring-2]="theirZoneActive()"
-			[class.ring-red-400]="theirZoneActive()"
-			[class.cursor-pointer]="theirZoneActive()"
-			(click)="theirZoneActive() && addMeld()"
-		>
-			<span class="w-full px-1 text-xs text-red-400">LORO</span>
-			@for (meld of theirMeldsData(); track $index) {
-				<ui-deck
-					[style.--z]="$index + 4"
-					[style.height.px]="meld.length * 26 + 16"
-					class="relative z-(--z) shrink-0"
-					[ngClass]="
-						theirZoneActive()
-							? 'cursor-pointer hover:ring-2 hover:ring-red-500 rounded'
-							: ''
-					"
-					[cards]="meld"
-					layout="vertical"
-					[gap]="-10"
-					[selectable]="false"
-					(click)="theirZoneActive() && attachToMeld($index); $event.stopPropagation()"
-				/>
-			}
-		</div>
+			<div
+				class="flex min-h-0 flex-row flex-wrap content-start items-start gap-3 overflow-hidden rounded-lg p-1 outline outline-red-300 transition-all"
+				[class.ring-2]="theirZoneActive()"
+				[class.ring-red-400]="theirZoneActive()"
+				[class.cursor-pointer]="theirZoneActive()"
+				(click)="theirZoneActive() && addMeld()"
+			>
+				<span class="w-full px-1 text-xs text-red-400">LORO</span>
+				@for (meld of theirMeldsData(); track $index) {
+					<ui-deck
+						[style.--z]="$index + 4"
+						[style.height.px]="meld.length * 26 + 16"
+						class="relative z-(--z) shrink-0"
+						[ngClass]="
+							theirZoneActive()
+								? 'cursor-pointer hover:ring-2 hover:ring-red-500 rounded'
+								: ''
+						"
+						[cards]="meld"
+						layout="vertical"
+						[gap]="-10"
+						[selectable]="false"
+						(click)="
+							theirZoneActive() && attachToMeld($index); $event.stopPropagation()
+						"
+					/>
+				}
+			</div>
 
-		<!-- OVEST (colonna destra) -->
+			<!-- OVEST (colonna destra) -->
+			<div
+				id="weast-col"
+				class="flex flex-col rounded-lg outline transition-all duration-300"
+				[ngClass]="
+					currentPlayer() === PlayerSide.West
+						? 'outline-2 outline-green-400 bg-green-400/10 shadow-[0_0_16px_2px_rgba(74,222,128,0.55)]'
+						: 'outline-white/15'
+				"
+			>
+				<span
+					class="z-10 shrink-0 rounded py-0.5 text-center text-[8px] font-bold tracking-tight select-none transition-colors duration-300"
+					[ngClass]="
+						currentPlayer() === PlayerSide.West
+							? 'bg-green-500 text-white animate-pulse'
+							: 'bg-black/40 text-white/50'
+					"
+					>OVEST</span
+				>
+				<div class="relative grow">
+					<ui-deck
+						#westDeck
+						[animate]="animate()"
+						class="absolute h-full w-full place-content-center"
+						layout="vertical"
+						[gap]="-10"
+						[rotate]="90"
+						[cards]="westCards()"
+						[faceDown]="debug() ? false : true"
+						[selectable]="
+							currentPlayer() === PlayerSide.West &&
+							turnStep() === RoundTurnStep.PlayAndDiscard
+						"
+					/>
+				</div>
+			</div>
+		</section>
+
+		<!-- TALLONE e MONTE SCARTI -->
+		<footer class="flex gap-4 shrink-0">
+			<ui-deck
+				#drawPile
+				[animate]="animate()"
+				[cards]="drawPileCards()"
+				layout="stack"
+				[faceDown]="true"
+				(click)="canDraw() && willTakeFromDrawPile()"
+				class="z-1 outline transition-all"
+				[ngClass]="
+					canDraw()
+						? 'outline-green-400 cursor-pointer hover:ring-2 hover:ring-green-400'
+						: 'outline-white/20 cursor-default'
+				"
+			/>
+			<ui-deck
+				#discardPile
+				[animate]="animate()"
+				[cards]="discardPileCards()"
+				layout="stack"
+				[faceDown]="false"
+				(click)="canDraw() && willTakeDiscardPile()"
+				class="z-2 outline grow transition-all"
+				[ngClass]="
+					canDraw()
+						? 'outline-green-400 cursor-pointer hover:ring-2 hover:ring-green-400'
+						: 'outline-white/20 cursor-default'
+				"
+			/>
+			<ui-deck
+				#pot1
+				[animate]="animate()"
+				[cards]="pot1Cards()"
+				layout="stack"
+				[faceDown]="true"
+				class="z-3 outline outline-blue-400 transition-all"
+				[ngClass]="pot1Cards().length ? '' : 'opacity-40'"
+			/>
+			<ui-deck
+				#pot2
+				[animate]="animate()"
+				[cards]="pot2Cards()"
+				layout="stack"
+				[faceDown]="true"
+				class="z-3 outline outline-red-400 transition-all"
+				[ngClass]="pot2Cards().length ? '' : 'opacity-40'"
+			/>
+		</footer>
+
+		<!-- SUD (in basso) -->
 		<div
-			id="weast-col"
-			class="flex flex-col rounded-lg outline transition-all duration-300"
+			class="flex w-full shrink-0 items-center gap-2 rounded-lg px-1 outline transition-all duration-300"
 			[ngClass]="
-				currentPlayer() === PlayerSide.West
+				currentPlayer() === PlayerSide.South
 					? 'outline-2 outline-green-400 bg-green-400/10 shadow-[0_0_16px_2px_rgba(74,222,128,0.55)]'
 					: 'outline-white/15'
 			"
 		>
 			<span
-				class="z-10 shrink-0 rounded py-0.5 text-center text-[8px] font-bold tracking-tight select-none transition-colors duration-300"
+				class="z-10 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider select-none transition-colors duration-300"
 				[ngClass]="
-					currentPlayer() === PlayerSide.West
+					currentPlayer() === PlayerSide.South
 						? 'bg-green-500 text-white animate-pulse'
 						: 'bg-black/40 text-white/50'
 				"
-				>OVEST</span
+				>SUD</span
 			>
-			<div class="relative grow">
-				<ui-deck
-					#westDeck
-					[animate]="animate()"
-					class="absolute h-full w-full place-content-center"
-					layout="vertical"
-					[gap]="-10"
-					[rotate]="90"
-					[cards]="westCards()"
-					[faceDown]="debug() ? false : true"
-					[selectable]="
-						currentPlayer() === PlayerSide.West &&
-						turnStep() === RoundTurnStep.PlayAndDiscard
-					"
-				/>
-			</div>
+			<ui-deck
+				#southDeck
+				[animate]="animate()"
+				layout="horizontal"
+				[cards]="southCards()"
+				[selectable]="canPlay()"
+				[faceDown]="false"
+				class="z-3 grow place-content-center"
+			/>
 		</div>
-	</section>
 
-	<!-- TALLONE e MONTE SCARTI -->
-	<footer class="flex gap-4 shrink-0">
-		<ui-deck
-			#drawPile
-			[animate]="animate()"
-			[cards]="drawPileCards()"
-			layout="stack"
-			[faceDown]="true"
-			(click)="canDraw() && willTakeFromDrawPile()"
-			class="z-1 outline transition-all"
-			[ngClass]="
-				canDraw()
-					? 'outline-green-400 cursor-pointer hover:ring-2 hover:ring-green-400'
-					: 'outline-white/20 cursor-default'
-			"
-		/>
-		<ui-deck
-			#discardPile
-			[animate]="animate()"
-			[cards]="discardPileCards()"
-			layout="stack"
-			[faceDown]="false"
-			(click)="canDraw() && willTakeDiscardPile()"
-			class="z-2 outline grow transition-all"
-			[ngClass]="
-				canDraw()
-					? 'outline-green-400 cursor-pointer hover:ring-2 hover:ring-green-400'
-					: 'outline-white/20 cursor-default'
-			"
-		/>
-		<ui-deck
-			#pot1
-			[animate]="animate()"
-			[cards]="pot1Cards()"
-			layout="stack"
-			[faceDown]="true"
-			class="z-3 outline outline-blue-400 transition-all"
-			[ngClass]="pot1Cards().length ? '' : 'opacity-40'"
-		/>
-		<ui-deck
-			#pot2
-			[animate]="animate()"
-			[cards]="pot2Cards()"
-			layout="stack"
-			[faceDown]="true"
-			class="z-3 outline outline-red-400 transition-all"
-			[ngClass]="pot2Cards().length ? '' : 'opacity-40'"
-		/>
-	</footer>
-
-	<!-- SUD (in basso) -->
-	<div
-		class="flex w-full shrink-0 items-center gap-2 rounded-lg px-1 outline transition-all duration-300"
-		[ngClass]="
-			currentPlayer() === PlayerSide.South
-				? 'outline-2 outline-green-400 bg-green-400/10 shadow-[0_0_16px_2px_rgba(74,222,128,0.55)]'
-				: 'outline-white/15'
-		"
-	>
-		<span
-			class="z-10 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider select-none transition-colors duration-300"
-			[ngClass]="
-				currentPlayer() === PlayerSide.South
-					? 'bg-green-500 text-white animate-pulse'
-					: 'bg-black/40 text-white/50'
-			"
-			>SUD</span
-		>
-		<ui-deck
-			#southDeck
-			[animate]="animate()"
-			layout="horizontal"
-			[cards]="southCards()"
-			[selectable]="canPlay()"
-			[faceDown]="false"
-			class="z-3 grow place-content-center"
-		/>
+		<img class="absolute left-0 top-0 w-full h-full -z-10" src="/images/table_bg.jpg" />
 	</div>
 
-	<img class="absolute left-0 top-0 w-full h-full -z-10" src="/images/table_bg.jpg" />
+	<!-- COLONNA MOSSE (solo desktop, collassabile) -->
+	@if (moveListOpen()) {
+		<aside
+			class="hidden w-72 shrink-0 flex-col overflow-hidden rounded-lg border-l border-white/10 bg-gray-900/80 text-gray-100 lg:flex"
+		>
+			<div class="flex items-center justify-between px-2 py-1">
+				<strong class="text-sm">Mosse</strong>
+				<button nz-button nzSize="small" (click)="toggleMoveList()">▶</button>
+			</div>
+			<div class="flex-1 overflow-auto px-2 pb-2 text-xs leading-snug">
+				@for (line of moveLines(); track $index) {
+					<div class="border-b border-white/5 py-0.5">{{ line }}</div>
+				} @empty {
+					<div class="text-gray-500">Nessuna mossa ancora.</div>
+				}
+			</div>
+		</aside>
+	} @else {
+		<button
+			class="hidden shrink-0 items-start rounded-lg border-l border-white/10 bg-gray-900/80 px-1 pt-2 text-[10px] tracking-wide text-gray-300 lg:flex"
+			(click)="toggleMoveList()"
+		>
+			◀&nbsp;Mosse
+		</button>
+	}
 </div>
 
 <!-- ============================================================
