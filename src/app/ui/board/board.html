@@ -100,6 +100,17 @@
 }
 
 <!-- ============================================================
+  VOCE IA: fumetto dell'ultima battuta
+============================================================ -->
+@if (aiSpeech(); as speech) {
+	<div class="absolute top-2 left-1/2 z-50 -translate-x-1/2 pointer-events-none">
+		<div class="rounded-2xl bg-white px-4 py-2 text-sm text-gray-900 shadow-lg">
+			<strong>{{ PLAYER_LABELS[speech.player] }}:</strong> {{ speech.text }}
+		</div>
+	</div>
+}
+
+<!-- ============================================================
   HEADER: stato partita, turno corrente, azioni
 ============================================================ -->
 <header class="p-2 flex gap-3 items-center flex-wrap z-10">

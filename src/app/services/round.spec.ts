@@ -2,7 +2,14 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
 import { DeckItem } from './cards';
-import { Round, RoundPhase, RoundPlayer, TEAM_BY_PLAYER } from './round';
+import {
+	Round,
+	RoundEventType,
+	RoundGameplayEvent,
+	RoundPhase,
+	RoundPlayer,
+	TEAM_BY_PLAYER,
+} from './round';
 
 /**
  * Invariante di univocità: sul tavolo esistono SEMPRE 108 carte, tutte con
@@ -165,5 +172,48 @@ describe('Round – chiusura (Art. 14)', () => {
 		expect(round.discard(natural)).toBeTrue();
 		expect(round.phase()).toBe(RoundPhase.Closed);
 		expect(round.winnerPlayer()).toBe(player);
+	});
+});
+
+/**
+ * Eventi di gioco fini: una emissione per azione, per IA/log/debug.
+ */
+describe('Round – eventi di gioco fini', () => {
+	let round: Round;
+
+	beforeEach(async () => {
+		TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] });
+		round = TestBed.inject(Round);
+		await round.prepareDeck();
+	});
+
+	it('emette Draw (senza carta) e Discard (con carta) su pesca e scarto', () => {
+		const events: RoundGameplayEvent[] = [];
+		round.gameplayEvents.subscribe((e) => events.push(e));
+
+		round.startHand();
+		const player = round.currentPlayer()!;
+		round.drawFromStock();
+		const card = round.hands()[player].at(-1)!;
+		round.discard(card);
+
+		const draw = events.find((e) => e.type === RoundEventType.Draw);
+		const discard = events.find((e) => e.type === RoundEventType.Discard);
+		expect(draw).toBeTruthy();
+		expect(draw!.cards).toBeUndefined(); // la pesca dal tallone è nascosta
+		expect(discard!.cards?.[0].uid).toBe(card.uid);
+	});
+
+	it('emette TakeDiscard con tutte le carte del monte', () => {
+		const events: RoundGameplayEvent[] = [];
+		round.gameplayEvents.subscribe((e) => events.push(e));
+
+		round.startHand();
+		const pileSize = round.discardPile().length;
+		round.takeDiscardPile();
+
+		const take = events.find((e) => e.type === RoundEventType.TakeDiscard);
+		expect(take).toBeTruthy();
+		expect(take!.cards?.length).toBe(pileSize);
 	});
 });

@@ -227,6 +227,11 @@ export class Game {
 		return this.round.events;
 	}
 
+	/** Stream degli eventi di gioco fini (una emissione per azione del turno). */
+	get gameplayEvents() {
+		return this.round.gameplayEvents;
+	}
+
 	// ============================================================
 	// COSTRUTTORE
 	// ============================================================

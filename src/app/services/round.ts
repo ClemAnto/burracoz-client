@@ -12,6 +12,29 @@ export enum PlayerSide {
 export type RoundPlayer = PlayerSide;
 export type RoundTeam = 'opponents' | 'ours';
 
+/** Tipo di evento di gioco fine, emesso a ogni azione del turno. */
+export enum RoundEventType {
+	Draw = 'draw',
+	TakeDiscard = 'take_discard',
+	Open = 'open',
+	Attach = 'attach',
+	Discard = 'discard',
+	TakePot = 'take_pot',
+	Close = 'close',
+}
+
+/**
+ * Evento di gioco broadcastato a ogni azione: alimenta IA (observe/comment),
+ * log e strumenti di debug. Contiene solo informazione osservabile al tavolo
+ * (la pesca dal tallone NON espone la carta).
+ */
+export type RoundGameplayEvent = {
+	type: RoundEventType;
+	player: RoundPlayer;
+	cards?: DeckItem[];
+	meldIndex?: number;
+};
+
 export enum RoundPhase {
 	Idle = 'idle',
 	InProgress = 'in_progress',
@@ -139,6 +162,9 @@ export class Round {
 		winnerTeam: RoundTeam;
 		score: RoundScore;
 	}>();
+
+	/** Stream degli eventi di gioco fini (una emissione per azione). */
+	readonly gameplayEvents = new Subject<RoundGameplayEvent>();
 
 	currentTeam = computed<RoundTeam | null>(() => {
 		const player = this.currentPlayer();
@@ -332,6 +358,8 @@ export class Round {
 		this.turnStep.set(RoundTurnStep.PlayAndDiscard);
 		glog(`${player} pesca dal tallone (${nextPile.length} carte restanti)`);
 		this.lastError.set(null);
+		// La carta pescata dal tallone è nascosta agli altri: nessun `cards`.
+		this.gameplayEvents.next({ type: RoundEventType.Draw, player });
 		return true;
 	}
 	takeDiscardPile(): boolean {
@@ -349,6 +377,7 @@ export class Round {
 		this.turnStep.set(RoundTurnStep.PlayAndDiscard);
 		glog(`${player} raccoglie il monte scarti (${pile.length} carte)`);
 		this.lastError.set(null);
+		this.gameplayEvents.next({ type: RoundEventType.TakeDiscard, player, cards: pile });
 		return true;
 	}
 
@@ -373,6 +402,7 @@ export class Round {
 
 		glog(`${player} cala: ${toMeld.join(' ')} (${this.hands()[player].length} carte in mano)`);
 		this.lastError.set(null);
+		this.gameplayEvents.next({ type: RoundEventType.Open, player, cards: toMeld });
 		this.handleEmptyHandAfterPlay(player);
 		return true;
 	}
@@ -407,6 +437,12 @@ export class Round {
 			`${player} lega ${toAttach.join(' ')} al gioco #${meldIndex + 1} (${this.hands()[player].length} carte in mano)`,
 		);
 		this.lastError.set(null);
+		this.gameplayEvents.next({
+			type: RoundEventType.Attach,
+			player,
+			cards: toAttach,
+			meldIndex,
+		});
 		this.handleEmptyHandAfterPlay(player);
 		return true;
 	}
@@ -440,6 +476,7 @@ export class Round {
 		this.discardPile.update((pile) => [...pile, cardItem]);
 		glog(`${player} scarta ${cardItem} (${this.hands()[player].length} carte in mano)`);
 		this.lastError.set(null);
+		this.gameplayEvents.next({ type: RoundEventType.Discard, player, cards: [cardItem] });
 
 		this.handleEmptyHandAfterPlay(player);
 
@@ -484,6 +521,7 @@ export class Round {
 		this.pots.update((ps) => ps.map((p, i) => (i === potIndex ? [] : p)));
 		this.playerHasTakenPot.update((m) => ({ ...m, [player]: true }));
 		glog(`${player} resta senza carte e prende il pozzetto (${pot.length} carte)`);
+		this.gameplayEvents.next({ type: RoundEventType.TakePot, player });
 	}
 
 	private nextTurn(): void {
@@ -503,6 +541,7 @@ export class Round {
 		this.winnerPlayer.set(player);
 		this.winnerTeam.set(team);
 		this.score.set(score);
+		this.gameplayEvents.next({ type: RoundEventType.Close, player });
 		this.events.next({ type: 'round_closed', winnerPlayer: player, winnerTeam: team, score });
 	}
 
