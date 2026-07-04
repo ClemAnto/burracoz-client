@@ -1,6 +1,13 @@
 import { Injectable } from '@angular/core';
-import { DeckItem, DeckItems } from '../ui/deck/deck';
-import { getCardAbsPos, getCardRank, howMany, STARTER_DECK, SuitTag } from './cards';
+import {
+	CardValue,
+	DeckItem,
+	DeckItems,
+	getCardRank,
+	howMany,
+	STARTER_DECK,
+	SuitTag,
+} from './cards';
 import { extractFrom, first, last } from '../utils/arrays';
 
 type MeldInput = DeckItems | DeckItem[] | string;
@@ -58,7 +65,7 @@ export class Rules {
 			//E' necessario giocare almeno una carta dalla mano
 			return null;
 		}
-		
+
 		const onTable = this.toDeckItems(tableCards);
 
 		if (!onTable.length && layedOff.length < 3) {
@@ -67,17 +74,15 @@ export class Rules {
 		}
 
 		const tableSuit = onTable.find((c) => !isWild(c))?.suit;
-		const runSuit = tableSuit || layedOff.find(c=>!isWild(c))?.suit;
+		const runSuit = tableSuit || layedOff.find((c) => !isWild(c))?.suit;
 
 		if (layedOff.some((c) => !isWild(c) && c.suit != runSuit)) {
 			//Le carte naturali devono essere dello stesso seme
 			return null;
 		}
 
-		
-
 		var wildAlreadyUsed = false;
-		
+
 		// Sul tavolo posso liberare un incastro sostituendolo.
 		const { tag: incastroTag, index: incastroIdx } = getIncastroTag(onTable);
 		if (incastroTag) {
@@ -85,51 +90,47 @@ export class Rules {
 			if (replacement) {
 				const [releasedWild] = onTable.splice(incastroIdx, 1, replacement);
 				layedOff.push(releasedWild);
-
 			} else {
 				wildAlreadyUsed = true;
 			}
-
 		} else {
-			
-			// Sul tavolo posso muovere eventuali matte alle estremità 
+			// Sul tavolo posso muovere eventuali matte alle estremità
 			if (isWild(onTable.at(-1))) layedOff.push(onTable.pop());
 			else if (isWild(onTable.at(0))) layedOff.push(onTable.shift());
 		}
 		// Piazziamo tutte le carte naturali
-		const run = new Map<number, DeckItem>()
+		const run = new Map<number, DeckItem>();
 
-		function addToRun(p:number, c:DeckItem) {
+		function addToRun(p: number, c: DeckItem) {
 			if (run.has(p)) return false;
 			run.set(p, c);
 			return true;
 		}
 
-		const tableOk = onTable.every((c,i)=>{
+		const tableOk = onTable.every((c, i) => {
 			let pos = getCardAbsPos(i, onTable);
 			return addToRun(pos, c);
-		})
+		});
 		if (!tableOk) return null;
 
-		var [ace] = extractFrom(layedOff, c=>c.value=="A",1);
-		const naturals = extractFrom(layedOff, c=>(!isWild(c) && c.value != "A"));
-		
-		const naturalOk = naturals.every(c=>{
+		var [ace] = extractFrom(layedOff, (c) => c.value == 'A', 1);
+		const naturals = extractFrom(layedOff, (c) => !isWild(c) && c.value != 'A');
+
+		const naturalOk = naturals.every((c) => {
 			var pos = getCardRank(c.value);
 			return addToRun(pos, c);
 		});
 		if (!naturalOk) return null;
 
-		var [natural2] = extractFrom(layedOff,c=>(+c.value==2 && c.suit==runSuit),1);
-		var [wild] = extractFrom(layedOff, c=>isWild(c),1);
-
+		var [natural2] = extractFrom(layedOff, (c) => +c.value == 2 && c.suit == runSuit, 1);
+		var [wild] = extractFrom(layedOff, (c) => isWild(c), 1);
 
 		if (natural2) {
 			if (wild || wildAlreadyUsed) {
 				if (!addToRun(2, natural2)) {
 					//Posizione 2 già occupata
 					return null;
-				} 
+				}
 				natural2 = null;
 			} else {
 				let mayBeCleanCanasta = Math.min(...run.keys()) == 3;
@@ -137,9 +138,9 @@ export class Rules {
 					if (!addToRun(13, natural2)) {
 						//Posizione 2 già occupata
 						return null;
-					} 
+					}
 					natural2 = null;
-				} 
+				}
 
 				wild = natural2;
 				natural2 = null;
@@ -148,18 +149,24 @@ export class Rules {
 
 		if (ace) {
 			//if (aceMayBeHigh(layedOff.concat(onTable))) {
-			const mayBeCleanCanasta = (!wild || (wild.suit==runSuit && +wild.value==2)) && !wildAlreadyUsed && run.size == 10;
-			const nogap = (Math.max(...run.keys()) - Math.min(...run.keys())) == (run.size-1);
-			if ((run.has(13) || (run.has(12) && wild && !wildAlreadyUsed && nogap)) && !mayBeCleanCanasta ) {
+			const mayBeCleanCanasta =
+				(!wild || (wild.suit == runSuit && +wild.value == 2)) &&
+				!wildAlreadyUsed &&
+				run.size == 10;
+			const nogap = Math.max(...run.keys()) - Math.min(...run.keys()) == run.size - 1;
+			if (
+				(run.has(13) || (run.has(12) && wild && !wildAlreadyUsed && nogap)) &&
+				!mayBeCleanCanasta
+			) {
 				if (!addToRun(14, ace)) {
 					//Posizione 14 già occupata
 					return null;
-				} 
+				}
 			} else {
 				if (!addToRun(1, ace)) {
 					//Posizione 1 già occupata
 					return null;
-				} 
+				}
 			}
 			ace = null;
 		}
@@ -167,10 +174,10 @@ export class Rules {
 		const positions = Array.from(run.keys());
 		const first = Math.min(...positions);
 		const last = Math.max(...positions);
-		const gaps = (last - first) - (positions.length-1);
-		
+		const gaps = last - first - (positions.length - 1);
+
 		if (gaps > 1) {
-			//Ci sono troppi buchi 
+			//Ci sono troppi buchi
 			return null;
 		}
 
@@ -184,28 +191,25 @@ export class Rules {
 			if (!addToRun(p, wild)) {
 				//Posizione già occupata
 				return null;
-			} 
+			}
 			wild = null;
 			wildAlreadyUsed = true;
 		}
 
-		
-		
-		
 		if (wild) {
 			if (wildAlreadyUsed) {
 				//Jolly eccedente
 				return null;
 			} else {
-				if (run.get(first)?.value == "A") { 
-					if (!addToRun(last+1, wild)) {
+				if (run.get(first)?.value == 'A') {
+					if (!addToRun(last + 1, wild)) {
 						return null;
 					}
 				} else {
-					if (!addToRun(first-1, wild)) {
+					if (!addToRun(first - 1, wild)) {
 						return null;
 					}
-				}	
+				}
 			}
 			wild = null;
 		}
@@ -214,17 +218,14 @@ export class Rules {
 			// Sono rimaste carte non posizionate
 			return null;
 		}
-		
-		
-		const result = this.toDeckItems([...run.keys()]
-			.sort((a,b)=>+b-a).map(pos=>run.get(pos)));
+
+		const result = this.toDeckItems(
+			[...run.keys()].sort((a, b) => +b - a).map((pos) => run.get(pos)),
+		);
 
 		//console.log(layOffCards.toString() + "   +   " + tableCards.toString() + "   ->   " + result.toString())
 		return result;
 	}
-
-	
-
 
 	private toDeckItems(cards?: MeldInput): DeckItems {
 		if (!cards) return new DeckItems();
@@ -266,40 +267,66 @@ export function aceMayBeHigh(cards: DeckItems) {
 }
 
 export function getIncastroTag(cards: DeckItems): { tag: string; index: number } {
-	const wildIndex = cards.findIndex((c,i)=>{
+	const wildIndex = cards.findIndex((c, i) => {
 		return isWild(c) && !isNatural2(cards, i);
 	});
 
-	if (wildIndex < 1 || wildIndex > cards.length-2) return {tag:null, index:-1};
+	if (wildIndex < 1 || wildIndex > cards.length - 2) return { tag: null, index: -1 };
 
-	const {card, offset} = getNaturalNear(cards, wildIndex); 
+	const { card, offset } = getNaturalNear(cards, wildIndex);
 	const tagIndex = STARTER_DECK.indexOf(card.tag) - offset;
-		
+
 	return {
 		tag: STARTER_DECK[tagIndex] ?? null,
 		index: wildIndex,
 	};
 }
 
-
-export function isNatural2(cards: DeckItems, index:number): boolean {
+export function isNatural2(cards: DeckItems, index: number): boolean {
 	const target = cards[index];
 	if (+target.value != 2) return false;
-	
-	const nearIndex = ['A',,'3','4'].findIndex((v,i)=>{
-		return v && cards[index-1+i]?.value == v;
-	})
-	
-	if (nearIndex<0) return null;
 
-	return cards[index-1+nearIndex].suit == target.suit;
-	
+	// Un 2 è "naturale" (occupa il rank 2, tra A e 3) se nel gioco è adiacente,
+	// nello stesso seme, a un A o a un 3; oppure a un 4 saltando una matta.
+	// Il controllo è simmetrico su entrambi i lati perché un gioco già validato
+	// viene memorizzato in ordine decrescente, mentre l'input di gioco è crescente.
+	const sameSuitAt = (offset: number, value: string): boolean => {
+		const near = cards[index + offset];
+		return !!near && near.suit === target.suit && near.value === value;
+	};
+
+	return (
+		sameSuitAt(-1, 'A') ||
+		sameSuitAt(+1, 'A') ||
+		sameSuitAt(-1, '3') ||
+		sameSuitAt(+1, '3') ||
+		sameSuitAt(-2, '4') ||
+		sameSuitAt(+2, '4')
+	);
 }
 
-export function getNaturalNear(cards:DeckItem[], index:number) {
-	const offset = [-1,+1].find(o=>getCardRank(cards[index+o]?.value));
+export function getNaturalNear(cards: DeckItem[], index: number) {
+	const offset = [-1, +1].find((o) => getCardRank(cards[index + o]?.value));
 	return {
-		card: cards[index+offset],
-		offset
+		card: cards[index + offset],
+		offset,
+	};
+}
+
+/**
+ * Posizione assoluta (rank) di una carta all'interno di una sequenza.
+ * Spostata qui da cards.ts perché dipende da isNatural2/aceMayBeHigh/getNaturalNear:
+ * mantenerla in cards.ts creava la dipendenza circolare cards↔rules.
+ */
+export function getCardAbsPos(cardIndex: number, cards: DeckItem[]): number {
+	let cardValue: CardValue = cards[cardIndex].value;
+	if (+cardValue == 2 && !isNatural2(DeckItems.fromArray(cards), cardIndex)) cardValue = '*';
+
+	let pos = getCardRank(cardValue, cardValue == 'A' && aceMayBeHigh(DeckItems.fromArray(cards)));
+	if (!pos) {
+		const { card, offset } = getNaturalNear(cards, cardIndex);
+		pos = getCardRank(card.value) - offset;
 	}
+
+	return pos;
 }

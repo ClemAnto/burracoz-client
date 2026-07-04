@@ -4,31 +4,49 @@
 		// la proprietà CSS `translate`, che è riservata al Tweener FLIP.
 		// Usa left/top + calc con le variabili del Deck padre.
 		position: absolute;
-		left: calc((var(--max-box-w) - var(--box-w)) / 2 - var(--sel, 0px) * sin(var(--rotate, 0deg)));
-		top: calc((var(--max-box-h) - var(--box-h)) / 2 + var(--sel, 0px) * cos(var(--rotate, 0deg)));
+		left: calc(
+			(var(--max-box-w) - var(--box-w)) / 2 - var(--sel, 0px) * sin(var(--rotate, 0deg))
+		);
+		top: calc(
+			(var(--max-box-h) - var(--box-h)) / 2 + var(--sel, 0px) * cos(var(--rotate, 0deg))
+		);
 		&:not(.tweening) {
-			transition: top 0.2s ease, left 0.2s ease;
+			transition:
+				top 0.2s ease,
+				left 0.2s ease,
+				box-shadow 0.2s ease;
+		}
+
+		// In volo (classe applicata dallo scope FLIP): sopra le carte ferme,
+		// ma mantenendo l'ordine relativo tra loro (--z = indice): senza questo,
+		// in un ventaglio sovrapposto finirebbero tutte a z uguale accavallandosi.
+		&.tweening {
+			z-index: calc(100 + var(--z, 0));
 		}
 
 		// Rotazione Z della singola carta, guidata da --rotate del Deck padre.
 		// Compone con il rotateY del flip fronte/retro senza conflitti
 		// perché la proprietà CSS `rotate` è applicata dopo `transform`.
+		// Durante un tween è il Tweener (WAAPI) ad animarla dal valore sorgente.
 		rotate: var(--rotate, 0deg);
-
-		::ng-deep {
-			> * {
-				transition: all 1s;
-			}
-		}
 	}
 }
 
-:host(.no-animate) {
+// ── Drag & drop di riordino ──────────────────────────────────────────────────
+.card-pivot.reorderable {
+	cursor: grab;
+	touch-action: none;
+}
+
+.card-pivot.dragging {
+	cursor: grabbing;
+	z-index: 50;
+
 	ui-card {
-		::ng-deep {
-			> * {
-				transition: none;
-			}
-		}
+		scale: 1.08;
+		filter: drop-shadow(0 8px 16px rgb(0 0 0 / 0.4));
+		transition:
+			scale 0.12s ease,
+			filter 0.12s ease;
 	}
 }

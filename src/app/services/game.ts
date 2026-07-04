@@ -1,16 +1,25 @@
 import { Injectable, computed, effect, signal } from '@angular/core';
 import { Subject } from 'rxjs';
 import { LocalStorage } from './local-storage';
-import { DealResult, Round, RoundPhase, RoundPlayer, RoundSavedState, RoundScore, RoundTeam } from './round';
+import {
+	CardRef,
+	DealResult,
+	Round,
+	RoundPhase,
+	RoundPlayer,
+	RoundSavedState,
+	RoundScore,
+	RoundTeam,
+} from './round';
 
 // ============================================================
 // TIPI DI STATO E EVENTI
 // ============================================================
 
 export enum GamePhase {
-	Idle    = 'idle',
+	Idle = 'idle',
 	Playing = 'playing',
-	Ended   = 'ended',
+	Ended = 'ended',
 }
 
 /** Risultato di una singola mano completata. */
@@ -37,16 +46,16 @@ type GameSavedState = {
 export enum GameEventType {
 	GameStarted = 'game_started',
 	HandStarted = 'hand_started',
-	HandEnded   = 'hand_ended',
-	GameEnded   = 'game_ended',
+	HandEnded = 'hand_ended',
+	GameEnded = 'game_ended',
 }
 
 /** Eventi emessi a livello di partita. */
 export type GameEvent =
 	| { type: GameEventType.GameStarted }
 	| { type: GameEventType.HandStarted; handIndex: number }
-	| { type: GameEventType.HandEnded;   result: HandResult }
-	| { type: GameEventType.GameEnded;   winner: RoundTeam; totalScore: GameTotalScore };
+	| { type: GameEventType.HandEnded; result: HandResult }
+	| { type: GameEventType.GameEnded; winner: RoundTeam; totalScore: GameTotalScore };
 
 // ============================================================
 // SERVIZIO GAME
@@ -98,6 +107,15 @@ export class Game {
 		),
 	);
 
+	/** Soglia punti che determina la fine della partita (Art. 18). Configurabile. */
+	readonly targetScore = signal<number>(2005);
+
+	/** Squadra vincitrice della partita (null finché la partita non è finita). */
+	readonly gameWinner = signal<RoundTeam | null>(null);
+
+	/** True quando la partita è terminata (una squadra ha superato la soglia). */
+	readonly isGameEnded = computed(() => this.phase() === GamePhase.Ended);
+
 	// ----------------------------------------------------------
 	// Passthrough dei signal del Round (livello mano corrente)
 	// Esposti tramite getter per evitare problemi di inizializzazione
@@ -105,58 +123,94 @@ export class Game {
 	// ----------------------------------------------------------
 
 	/** Fase della mano corrente: idle | in_progress | closed. */
-	get roundPhase() { return this.round.phase; }
+	get roundPhase() {
+		return this.round.phase;
+	}
 
 	/** Il giocatore che deve agire in questo momento. */
-	get currentPlayer() { return this.round.currentPlayer; }
+	get currentPlayer() {
+		return this.round.currentPlayer;
+	}
 
 	/** Passo del turno: draw_or_collect | play_and_discard. */
-	get turnStep() { return this.round.turnStep; }
+	get turnStep() {
+		return this.round.turnStep;
+	}
 
 	/** La squadra del giocatore corrente (computed). */
-	get currentTeam() { return this.round.currentTeam; }
+	get currentTeam() {
+		return this.round.currentTeam;
+	}
 
 	/** Numero di turno dall'inizio della mano. */
-	get turnIndex() { return this.round.turnIndex; }
+	get turnIndex() {
+		return this.round.turnIndex;
+	}
 
 	/** Il mazziere estratto a sorte per questa mano. */
-	get dealer() { return this.round.dealer; }
+	get dealer() {
+		return this.round.dealer;
+	}
 
 	/** Carte in mano a ciascun giocatore { east, west, north, south }. */
-	get hands() { return this.round.hands; }
+	get hands() {
+		return this.round.hands;
+	}
 
 	/** Lo stock (carte rimanenti da pescare). */
-	get drawPile() { return this.round.drawPile; }
+	get drawPile() {
+		return this.round.drawPile;
+	}
 
 	/** Il monte degli scarti. */
-	get discardPile() { return this.round.discardPile; }
+	get discardPile() {
+		return this.round.discardPile;
+	}
 
 	/** I pozzetti ancora disponibili (1 per squadra, assegnato al primo esaurimento). */
-	get pots() { return this.round.pots; }
+	get pots() {
+		return this.round.pots;
+	}
 
 	/** I giochi calati a terra per ciascuna squadra { ours, opponents }. */
-	get melds() { return this.round.melds; }
+	get melds() {
+		return this.round.melds;
+	}
 
 	/** Indica se un giocatore specifico ha già preso il suo pozzetto. */
-	get playerHasTakenPot() { return this.round.playerHasTakenPot; }
+	get playerHasTakenPot() {
+		return this.round.playerHasTakenPot;
+	}
 
 	/** Indica se una squadra ha almeno un burraco (≥7 carte) a terra (computed). */
-	get teamHasBurraco() { return this.round.teamHasBurraco; }
+	get teamHasBurraco() {
+		return this.round.teamHasBurraco;
+	}
 
 	/** Ultimo errore generato da un'azione non valida (null se nessun errore). */
-	get lastError() { return this.round.lastError; }
+	get lastError() {
+		return this.round.lastError;
+	}
 
 	/** True se ci sono giocate annullabili nel turno corrente. */
-	get canUndoTurn() { return this.round.canUndoTurn; }
+	get canUndoTurn() {
+		return this.round.canUndoTurn;
+	}
 
 	/** Giocatore che ha chiuso l'ultima mano. */
-	get winnerPlayer() { return this.round.winnerPlayer; }
+	get winnerPlayer() {
+		return this.round.winnerPlayer;
+	}
 
 	/** Squadra che ha vinto l'ultima mano. */
-	get winnerTeam() { return this.round.winnerTeam; }
+	get winnerTeam() {
+		return this.round.winnerTeam;
+	}
 
 	/** Punteggio dell'ultima mano (disponibile dopo la chiusura). */
-	get handScore() { return this.round.score; }
+	get handScore() {
+		return this.round.score;
+	}
 
 	// ----------------------------------------------------------
 	// Stream di eventi
@@ -169,7 +223,9 @@ export class Game {
 	 * Ri-espone lo stream di eventi del Round corrente.
 	 * Getter per evitare riferimento a `this.round` prima dell'inizializzazione.
 	 */
-	get roundEvents() { return this.round.events; }
+	get roundEvents() {
+		return this.round.events;
+	}
 
 	// ============================================================
 	// COSTRUTTORE
@@ -177,7 +233,10 @@ export class Game {
 
 	private static readonly STORAGE_KEY = 'burracoz_v1';
 
-	constructor(private readonly round: Round, private readonly storage: LocalStorage) {
+	constructor(
+		private readonly round: Round,
+		private readonly storage: LocalStorage,
+	) {
 		// Intercetta la chiusura del round per registrare il risultato
 		// e aggiornare lo stato del game.
 		this.round.events.subscribe((event) => {
@@ -217,6 +276,7 @@ export class Game {
 	async resetGame() {
 		this.handHistory.set([]);
 		this.handIndex.set(0);
+		this.gameWinner.set(null);
 		this.phase.set(GamePhase.Idle);
 		await this.round.prepareDeck();
 	}
@@ -227,6 +287,11 @@ export class Game {
 	 * per gestire l'animazione di distribuzione.
 	 */
 	startGame(): void {
+		// Partita nuova: azzera storico e contatore così una "NUOVA PARTITA"
+		// dopo la fine riparte pulita (all'avvio iniziale sono già vuoti).
+		this.handHistory.set([]);
+		this.handIndex.set(0);
+		this.gameWinner.set(null);
 		this.phase.set(GamePhase.Playing);
 		this.gameEvents.next({ type: GameEventType.GameStarted });
 	}
@@ -235,8 +300,17 @@ export class Game {
 	 * Prepara la distribuzione di una nuova mano: incrementa il contatore
 	 * e calcola la distribuzione senza aggiornare i signal del Round.
 	 * La Board usa il DealResult per animare la distribuzione, poi chiama commitHand().
+	 *
+	 * Dalla seconda mano in poi il mazzo va ricostituito e rimescolato: a fine
+	 * mano le carte sono sparse tra mani, giochi, pozzetti e scarti, e nel tallone
+	 * ne restano troppo poche per una nuova distribuzione. `prepareDeck()` le
+	 * raccoglie tutte e le rimescola. Alla prima mano (round in Idle) il mazzo è
+	 * già pronto e rimescolato, quindi si salta.
 	 */
-	prepareHand(): DealResult {
+	async prepareHand(): Promise<DealResult> {
+		if (this.round.phase() !== RoundPhase.Idle) {
+			await this.round.prepareDeck();
+		}
 		this.handIndex.update((n) => n + 1);
 		return this.round.prepareDeal();
 	}
@@ -254,9 +328,9 @@ export class Game {
 	 * Avvia la mano successiva dopo la chiusura (senza animazione).
 	 * Non fa nulla se la partita non è in corso.
 	 */
-	startNextHand(): void {
+	async startNextHand(): Promise<void> {
 		if (this.phase() !== GamePhase.Playing) return;
-		const deal = this.prepareHand();
+		const deal = await this.prepareHand();
 		this.commitHand(deal);
 	}
 
@@ -291,7 +365,7 @@ export class Game {
 	 *
 	 * @param cards le carte da calare, es. ['7♥️', '7♦️', '7♠️']
 	 */
-	openMeld(cards: string[]): boolean {
+	openMeld(cards: CardRef[]): boolean {
 		return this.round.openMeld(cards);
 	}
 
@@ -302,7 +376,7 @@ export class Game {
 	 * @param meldIndex indice del gioco a terra nella lista della squadra corrente
 	 * @param cards le carte da aggiungere al gioco
 	 */
-	attachToMeld(meldIndex: number, cards: string[]): boolean {
+	attachToMeld(meldIndex: number, cards: CardRef[]): boolean {
 		return this.round.attachToMeld(meldIndex, cards);
 	}
 
@@ -318,7 +392,7 @@ export class Game {
 	 *
 	 * @param card la carta da scartare
 	 */
-	discard(card: string): boolean {
+	discard(card: CardRef): boolean {
 		return this.round.discard(card);
 	}
 
@@ -366,7 +440,22 @@ export class Game {
 		this.handHistory.update((h) => h.concat(result));
 		this.gameEvents.next({ type: GameEventType.HandEnded, result });
 
-		// TODO futuro: confrontare totalScore con la soglia di fine partita
-		// e chiamare this.endGame() se la partita è terminata.
+		this.maybeEndGame();
+	}
+
+	/**
+	 * Termina la partita se una squadra ha raggiunto la soglia (Art. 18).
+	 * A parità di punteggio sopra soglia si gioca un'altra mano (nessun vincitore).
+	 */
+	private maybeEndGame(): void {
+		const totals = this.totalScore();
+		const target = this.targetScore();
+		if (totals.ours < target && totals.opponents < target) return;
+		if (totals.ours === totals.opponents) return;
+
+		const winner: RoundTeam = totals.ours > totals.opponents ? 'ours' : 'opponents';
+		this.gameWinner.set(winner);
+		this.phase.set(GamePhase.Ended);
+		this.gameEvents.next({ type: GameEventType.GameEnded, winner, totalScore: totals });
 	}
 }

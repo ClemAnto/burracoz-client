@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Rules } from './rules';
-import { DeckItems } from '../ui/deck/deck';
+import { DeckItems } from './cards';
 
 type TestType = 'validateRun' | 'validateSet' | 'validateMeld';
 

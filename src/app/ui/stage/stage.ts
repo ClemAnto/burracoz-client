@@ -6,7 +6,7 @@ import { Board } from '../board/board';
 	imports: [Board],
 	templateUrl: './stage.html',
 	host: {
-		class:'flex w-full h-full'
-	}
+		class: 'flex w-full h-full',
+	},
 })
 export class Stage {}

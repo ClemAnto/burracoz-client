@@ -1,44 +1,24 @@
 import { Component, computed, input } from '@angular/core';
-import { CardValue, Suit } from '../../services/cards';
+import { DeckItem } from '../../services/cards';
 import { SuitIcon } from '../suit-icon/suit-icon';
-
-
-type SimpleSuit = 'h' | 'd' | 's' | 'c' | '♣️' | '♠️' | '♦️' | '♥️';
 
 @Component({
 	selector: 'ui-card',
 	imports: [SuitIcon],
 	templateUrl: './card.html',
 	styleUrl: './card.scss',
-	//'[class]': `faceDown() ? 'rotate-y-180' : ''`
 	host: {
 		'[style.--rot-y.deg]': 'faceDown() ? 180 : 0',
-		'[attr.data-card]': 'card()'
+		'[attr.data-card]': 'item()?.tag',
 	},
 })
 export class Card {
 	faceDown = input<boolean>();
-	card = input<string>();
 
-	suit = computed<Suit>(() => {
-		const s = (this.card() ?? '').match(/\W+/)[0];
+	/** L'istanza già parsata: la carta non ri-parsa mai il tag. */
+	item = input<DeckItem>();
 
-		switch (s) {
-			case 'h':
-			case '♥️':
-				return Suit.Hearts;
-			case 'd':
-			case '♦️':
-				return Suit.Diamonds;
-			case 'c':
-			case '♣️':
-				return Suit.Clubs;
-			case 's':
-			case '♠️':
-				return Suit.Spades;
-		}
-		return null;
-	});
+	suit = computed(() => this.item()?.suit);
 
-	value = computed<CardValue>(() => (this.card() ?? '').match(/[\w*]+/)[0] as CardValue);
+	value = computed(() => this.item()?.value);
 }

@@ -4,10 +4,21 @@
 @if (isHandClosed()) {
 	<div class="absolute inset-0 z-40 bg-black/80 flex items-center justify-center">
 		<div class="bg-white rounded-2xl p-8 min-w-85 shadow-2xl">
-			<h2 class="text-2xl font-bold text-center mb-1">Mano chiusa!</h2>
-			<p class="text-center text-gray-500 mb-4">
-				Chiusa da: <strong>{{ winnerPlayer() | uppercase }}</strong>
-			</p>
+			@if (isGameEnded()) {
+				<h2 class="text-2xl font-bold text-center mb-1">Partita finita!</h2>
+				<p class="text-center text-gray-500 mb-4">
+					Vince la squadra:
+					<strong>{{ gameWinner() === 'ours' ? 'NOI' : 'AVVERSARI' }}</strong>
+				</p>
+			} @else {
+				<h2 class="text-2xl font-bold text-center mb-1">Mano chiusa!</h2>
+				<p class="text-center text-gray-500 mb-4">
+					Chiusa da:
+					<strong>{{
+						PLAYER_LABELS[winnerPlayer()] ?? (winnerPlayer() | uppercase)
+					}}</strong>
+				</p>
+			}
 
 			@let s = handScore();
 			@if (s) {
@@ -27,23 +38,39 @@
 						</tr>
 						<tr>
 							<td class="py-0.5 text-gray-600">Burraco</td>
-							<td class="text-right text-green-600">+{{ s.ours.breakdown.burracoBonus }}</td>
-							<td class="text-right text-green-600">+{{ s.opponents.breakdown.burracoBonus }}</td>
+							<td class="text-right text-green-600">
+								+{{ s.ours.breakdown.burracoBonus }}
+							</td>
+							<td class="text-right text-green-600">
+								+{{ s.opponents.breakdown.burracoBonus }}
+							</td>
 						</tr>
 						<tr>
 							<td class="py-0.5 text-gray-600">Chiusura</td>
-							<td class="text-right text-green-600">+{{ s.ours.breakdown.closureBonus }}</td>
-							<td class="text-right text-green-600">+{{ s.opponents.breakdown.closureBonus }}</td>
+							<td class="text-right text-green-600">
+								+{{ s.ours.breakdown.closureBonus }}
+							</td>
+							<td class="text-right text-green-600">
+								+{{ s.opponents.breakdown.closureBonus }}
+							</td>
 						</tr>
 						<tr>
 							<td class="py-0.5 text-gray-600">Carte in mano</td>
-							<td class="text-right text-red-500">-{{ s.ours.breakdown.remainingHandPenalty }}</td>
-							<td class="text-right text-red-500">-{{ s.opponents.breakdown.remainingHandPenalty }}</td>
+							<td class="text-right text-red-500">
+								-{{ s.ours.breakdown.remainingHandPenalty }}
+							</td>
+							<td class="text-right text-red-500">
+								-{{ s.opponents.breakdown.remainingHandPenalty }}
+							</td>
 						</tr>
 						<tr>
 							<td class="py-0.5 text-gray-600">Pozzetto non preso</td>
-							<td class="text-right text-red-500">-{{ s.ours.breakdown.potNotTakenPenalty }}</td>
-							<td class="text-right text-red-500">-{{ s.opponents.breakdown.potNotTakenPenalty }}</td>
+							<td class="text-right text-red-500">
+								-{{ s.ours.breakdown.potNotTakenPenalty }}
+							</td>
+							<td class="text-right text-red-500">
+								-{{ s.opponents.breakdown.potNotTakenPenalty }}
+							</td>
 						</tr>
 						<tr class="border-t font-bold">
 							<td class="pt-1">TOTALE</td>
@@ -59,9 +86,15 @@
 				</p>
 			}
 
-			<button nz-button nzType="primary" class="w-full" (click)="nextHand()">
-				NUOVA MANO
-			</button>
+			@if (isGameEnded()) {
+				<button nz-button nzType="primary" class="w-full" (click)="startGame()">
+					NUOVA PARTITA
+				</button>
+			} @else {
+				<button nz-button nzType="primary" class="w-full" (click)="nextHand()">
+					NUOVA MANO
+				</button>
+			}
 		</div>
 	</div>
 }
@@ -70,16 +103,21 @@
   HEADER: stato partita, turno corrente, azioni
 ============================================================ -->
 <header class="p-2 flex gap-3 items-center flex-wrap z-10">
-
-
 	@if (roundPhase() === RoundPhase.Idle) {
 		<button nz-button nzType="primary" (click)="startGame()">INIZIA</button>
 	}
 
 	@if (roundPhase() === RoundPhase.InProgress) {
-		<span class="font-semibold">Turno di <strong>{{ currentPlayer() }}</strong></span>
+		<nz-tag nzColor="green" class="m-0! flex items-center gap-1.5 text-sm font-semibold">
+			<span class="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+			Turno di <strong class="tracking-wide">{{ PLAYER_LABELS[currentPlayer()] }}</strong>
+		</nz-tag>
 		<span class="text-gray-400 text-sm">
-			{{ turnStep() === RoundTurnStep.DrawOrCollect ? '— Pesca o raccogli gli scarti' : '— Gioca e scarta' }}
+			{{
+				turnStep() === RoundTurnStep.DrawOrCollect
+					? '— Pesca o raccogli gli scarti'
+					: '— Gioca e scarta'
+			}}
 		</span>
 
 		@if (canPlay()) {
@@ -95,194 +133,259 @@
 	}
 
 	<button nz-button nzDanger class="ml-auto" (click)="resetGame()">RESET</button>
-	@if (roundPhase() !== RoundPhase.Idle) {
-	}
+	@if (roundPhase() !== RoundPhase.Idle) {}
 </header>
 
 <!-- ============================================================
   TAVOLO DI GIOCO — layout fisso per tutti e 4 i giocatori
   Il contorno verde evidenzia il giocatore di turno
 ============================================================ -->
-<div class="flex flex-col gap-2 p-2 max-w-full outline outline-blue-600 grow 
-	overflow-hidden isolate">
-	<ui-tweener #tweener [disabled]="!animate()" (tweenComplete)="onTweenComplete()">
-
-		<!-- NORD (in alto) -->
-		<header
-			class="w-full outline"
-			[class.outline-green-400]="currentPlayer() === PlayerSide.North"
-			[class.outline-amber-500]="currentPlayer() !== PlayerSide.North"
+<div
+	class="flex flex-col gap-2 p-2 max-w-full outline outline-blue-600 grow overflow-hidden isolate"
+	uiTweenScope
+	#tweener="uiTweenScope"
+	[disabled]="!animate()"
+	[debug]="tweenDebug()"
+>
+	<!-- NORD (in alto) -->
+	<header
+		class="w-full relative rounded-lg outline transition-all duration-300"
+		[ngClass]="
+			currentPlayer() === PlayerSide.North
+				? 'outline-2 outline-green-400 bg-green-400/10 shadow-[0_0_16px_2px_rgba(74,222,128,0.55)]'
+				: 'outline-white/15'
+		"
+	>
+		<span
+			class="absolute top-1 left-1 z-10 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider pointer-events-none select-none transition-colors duration-300"
+			[ngClass]="
+				currentPlayer() === PlayerSide.North
+					? 'bg-green-500 text-white animate-pulse'
+					: 'bg-black/40 text-white/50'
+			"
+			>NORD</span
 		>
-			
-			<ui-deck
-				#northDeck
-				[animate]="animate()"
-				[cards]="northCards()"
-				[faceDown]="debug() ? false : true"
-				[selectable]="currentPlayer() === PlayerSide.North && turnStep() === RoundTurnStep.PlayAndDiscard"
-				class="z-3 place-content-center"
-			/>
-		</header>
+		<ui-deck
+			#northDeck
+			[animate]="animate()"
+			[cards]="northCards()"
+			[faceDown]="debug() ? false : true"
+			[selectable]="
+				currentPlayer() === PlayerSide.North && turnStep() === RoundTurnStep.PlayAndDiscard
+			"
+			class="z-3 place-content-center"
+		/>
+	</header>
 
-		<!-- MELDS: Est | Giochi NORD+SUD | Giochi EST+OVEST | Ovest -->
-		<section class="grid grid-cols-[40px_1fr_1fr_40px] gap-2 grow">
-
-			<!-- EST (colonna sinistra) -->
-			<div
-				id="east-col"
-				class="flex outline relative"
-				[class.outline-green-400]="currentPlayer() === PlayerSide.East"
-				[class.outline-amber-500]="currentPlayer() !== PlayerSide.East"
-			>
-				
-				<ui-deck
-					#eastDeck
-				[animate]="animate()"
-					class="absolute h-full w-full place-content-center"
-					layout="vertical"
-					[gap]="-10"
-					[rotate]="90"
-					[cards]="eastCards()"
-					[faceDown]="debug() ? false : true"
-					[selectable]="currentPlayer() === PlayerSide.East && turnStep() === RoundTurnStep.PlayAndDiscard"
-				/>
-			</div>
-
-			<!-- Giochi della squadra NORD+SUD (ourMelds).
-			     Click sul container = nuova calata.
-			     Click sul singolo gioco = attacco a quel gioco.
-			     Interattivo solo quando è il turno di nord o sud. -->
-			<div
-				class="outline outline-blue-300 transition-all"
-				[class.ring-2]="ourZoneActive()"
-				[class.ring-blue-400]="ourZoneActive()"
-				[class.cursor-pointer]="ourZoneActive()"
-				(click)="ourZoneActive() && addMeld()"
-			>
-				<span class="text-xs text-blue-400 px-1">NOI</span>
-				@for (meld of ourMeldsData(); track $index) {
-					<ui-deck
-						[style.--z]="$index + 4"
-						class="relative z-(--z)"
-						layout="vertical"
-						[gap]="-10"
-						[ngClass]="ourZoneActive() ? 'cursor-pointer hover:ring-2 hover:ring-blue-500 rounded' : ''"
-						[cards]="meld"
-						[selectable]="false"
-						(click)="ourZoneActive() && attachToMeld($index); $event.stopPropagation()"
-					/>
-				}
-			</div>
-
-			<!-- Giochi della squadra EST+OVEST (theirMelds).
-			     Interattivo solo quando è il turno di est o ovest. -->
-			<div
-				class="outline outline-red-300 transition-all"
-				[class.ring-2]="theirZoneActive()"
-				[class.ring-red-400]="theirZoneActive()"
-				[class.cursor-pointer]="theirZoneActive()"
-				(click)="theirZoneActive() && addMeld()"
-			>
-				<span class="text-xs text-red-400 px-1">LORO</span>
-				@for (meld of theirMeldsData(); track $index) {
-					<ui-deck
-						[style.--z]="$index + 4"
-						class="relative z-(--z)"
-						[ngClass]="theirZoneActive() ? 'cursor-pointer hover:ring-2 hover:ring-red-500 rounded' : ''"
-						[cards]="meld"
-						layout="vertical"
-						[gap]="-10"
-						[selectable]="false"
-						(click)="theirZoneActive() && attachToMeld($index); $event.stopPropagation()"
-					/>
-				}
-			</div>
-
-			<!-- OVEST (colonna destra) -->
-			<div
-				id="weast-col"
-				class="flex outline relative"
-				[class.outline-green-400]="currentPlayer() === PlayerSide.West"
-				[class.outline-amber-500]="currentPlayer() !== PlayerSide.West"
-			>
-
-				<ui-deck
-					#westDeck
-				[animate]="animate()"
-					class="absolute h-full w-full place-content-center"
-					layout="vertical"
-					[gap]="-10"
-					[rotate]="90"
-					[cards]="westCards()"
-					[faceDown]="debug() ? false : true"
-					[selectable]="currentPlayer() === PlayerSide.West && turnStep() === RoundTurnStep.PlayAndDiscard"
-				/>
-				
-				
-			</div>
-		</section>
-
-		<!-- TALLONE e MONTE SCARTI -->
-		<footer class="flex gap-4 shrink-0">
-			<ui-deck
-				#drawPile
-				[animate]="animate()"
-				[cards]="drawPileCards()"
-				layout="stack"
-				[faceDown]="true"
-				(click)="canDraw() && willTakeFromDrawPile()"
-				class="z-1 outline transition-all"
-				[ngClass]="canDraw() ? 'outline-green-400 cursor-pointer hover:ring-2 hover:ring-green-400' : 'outline-amber-500 cursor-default'"
-			/>
-			<ui-deck
-				#discardPile
-				[animate]="animate()"
-				[cards]="discardPileCards()"
-				layout="stack"
-				[faceDown]="false"
-				(click)="canDraw() && willTakeDiscardPile()"
-				class="z-2 outline grow transition-all"
-				[ngClass]="canDraw() ? 'outline-green-400 cursor-pointer hover:ring-2 hover:ring-green-400' : 'outline-amber-500 cursor-default'"
-			/>
-			<ui-deck
-				#pot1
-				[animate]="animate()"
-				[cards]="pot1Cards()"
-				layout="stack"
-				[faceDown]="true"
-				class="z-3 outline outline-blue-400 transition-all"
-				[ngClass]="pot1Cards().length ? '' : 'opacity-40'"
-			/>
-			<ui-deck
-				#pot2
-				[animate]="animate()"
-				[cards]="pot2Cards()"
-				layout="stack"
-				[faceDown]="true"
-				class="z-3 outline outline-red-400 transition-all"
-				[ngClass]="pot2Cards().length ? '' : 'opacity-40'"
-			/>
-		</footer>
-
-		<!-- SUD (in basso) -->
+	<!-- MELDS: Est | Giochi NORD+SUD | Giochi EST+OVEST | Ovest -->
+	<section class="grid grid-cols-[40px_1fr_1fr_40px] gap-2 grow">
+		<!-- EST (colonna sinistra) -->
 		<div
-			class="w-full outline"
-			[class.outline-green-400]="currentPlayer() === PlayerSide.South"
-			[class.outline-amber-500]="currentPlayer() !== PlayerSide.South"
+			id="east-col"
+			class="flex relative rounded-lg outline transition-all duration-300"
+			[ngClass]="
+				currentPlayer() === PlayerSide.East
+					? 'outline-2 outline-green-400 bg-green-400/10 shadow-[0_0_16px_2px_rgba(74,222,128,0.55)]'
+					: 'outline-white/15'
+			"
 		>
+			<span
+				class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 rounded-full px-0.5 py-2 text-[10px] font-bold tracking-wider pointer-events-none select-none transition-colors duration-300 [writing-mode:vertical-rl]"
+				[ngClass]="
+					currentPlayer() === PlayerSide.East
+						? 'bg-green-500 text-white animate-pulse'
+						: 'bg-black/40 text-white/50'
+				"
+				>EST</span
+			>
 			<ui-deck
-				#southDeck
+				#eastDeck
 				[animate]="animate()"
-				layout="horizontal"
-				[cards]="southCards()"
-				[selectable]="canPlay()"
-				[faceDown]="false"
-				class="z-3 place-content-center"
+				class="absolute h-full w-full place-content-center"
+				layout="vertical"
+				[gap]="-10"
+				[rotate]="90"
+				[cards]="eastCards()"
+				[faceDown]="debug() ? false : true"
+				[selectable]="
+					currentPlayer() === PlayerSide.East &&
+					turnStep() === RoundTurnStep.PlayAndDiscard
+				"
 			/>
 		</div>
 
-	</ui-tweener>
-	<img
-		class="absolute left-0 top-0 w-full h-full -z-10"
-		src="/images/table_bg.jpg" />
+		<!-- Giochi della squadra NORD+SUD (ourMelds).
+			     Click sul container = nuova calata.
+			     Click sul singolo gioco = attacco a quel gioco.
+			     Interattivo solo quando è il turno di nord o sud. -->
+		<div
+			class="outline outline-blue-300 transition-all"
+			[class.ring-2]="ourZoneActive()"
+			[class.ring-blue-400]="ourZoneActive()"
+			[class.cursor-pointer]="ourZoneActive()"
+			(click)="ourZoneActive() && addMeld()"
+		>
+			<span class="text-xs text-blue-400 px-1">NOI</span>
+			@for (meld of ourMeldsData(); track $index) {
+				<ui-deck
+					[style.--z]="$index + 4"
+					class="relative z-(--z)"
+					layout="vertical"
+					[gap]="-10"
+					[ngClass]="
+						ourZoneActive()
+							? 'cursor-pointer hover:ring-2 hover:ring-blue-500 rounded'
+							: ''
+					"
+					[cards]="meld"
+					[selectable]="false"
+					(click)="ourZoneActive() && attachToMeld($index); $event.stopPropagation()"
+				/>
+			}
+		</div>
+
+		<!-- Giochi della squadra EST+OVEST (theirMelds).
+			     Interattivo solo quando è il turno di est o ovest. -->
+		<div
+			class="outline outline-red-300 transition-all"
+			[class.ring-2]="theirZoneActive()"
+			[class.ring-red-400]="theirZoneActive()"
+			[class.cursor-pointer]="theirZoneActive()"
+			(click)="theirZoneActive() && addMeld()"
+		>
+			<span class="text-xs text-red-400 px-1">LORO</span>
+			@for (meld of theirMeldsData(); track $index) {
+				<ui-deck
+					[style.--z]="$index + 4"
+					class="relative z-(--z)"
+					[ngClass]="
+						theirZoneActive()
+							? 'cursor-pointer hover:ring-2 hover:ring-red-500 rounded'
+							: ''
+					"
+					[cards]="meld"
+					layout="vertical"
+					[gap]="-10"
+					[selectable]="false"
+					(click)="theirZoneActive() && attachToMeld($index); $event.stopPropagation()"
+				/>
+			}
+		</div>
+
+		<!-- OVEST (colonna destra) -->
+		<div
+			id="weast-col"
+			class="flex relative rounded-lg outline transition-all duration-300"
+			[ngClass]="
+				currentPlayer() === PlayerSide.West
+					? 'outline-2 outline-green-400 bg-green-400/10 shadow-[0_0_16px_2px_rgba(74,222,128,0.55)]'
+					: 'outline-white/15'
+			"
+		>
+			<span
+				class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 rounded-full px-0.5 py-2 text-[10px] font-bold tracking-wider pointer-events-none select-none transition-colors duration-300 [writing-mode:vertical-rl]"
+				[ngClass]="
+					currentPlayer() === PlayerSide.West
+						? 'bg-green-500 text-white animate-pulse'
+						: 'bg-black/40 text-white/50'
+				"
+				>OVEST</span
+			>
+			<ui-deck
+				#westDeck
+				[animate]="animate()"
+				class="absolute h-full w-full place-content-center"
+				layout="vertical"
+				[gap]="-10"
+				[rotate]="90"
+				[cards]="westCards()"
+				[faceDown]="debug() ? false : true"
+				[selectable]="
+					currentPlayer() === PlayerSide.West &&
+					turnStep() === RoundTurnStep.PlayAndDiscard
+				"
+			/>
+		</div>
+	</section>
+
+	<!-- TALLONE e MONTE SCARTI -->
+	<footer class="flex gap-4 shrink-0">
+		<ui-deck
+			#drawPile
+			[animate]="animate()"
+			[cards]="drawPileCards()"
+			layout="stack"
+			[faceDown]="true"
+			(click)="canDraw() && willTakeFromDrawPile()"
+			class="z-1 outline transition-all"
+			[ngClass]="
+				canDraw()
+					? 'outline-green-400 cursor-pointer hover:ring-2 hover:ring-green-400'
+					: 'outline-white/20 cursor-default'
+			"
+		/>
+		<ui-deck
+			#discardPile
+			[animate]="animate()"
+			[cards]="discardPileCards()"
+			layout="stack"
+			[faceDown]="false"
+			(click)="canDraw() && willTakeDiscardPile()"
+			class="z-2 outline grow transition-all"
+			[ngClass]="
+				canDraw()
+					? 'outline-green-400 cursor-pointer hover:ring-2 hover:ring-green-400'
+					: 'outline-white/20 cursor-default'
+			"
+		/>
+		<ui-deck
+			#pot1
+			[animate]="animate()"
+			[cards]="pot1Cards()"
+			layout="stack"
+			[faceDown]="true"
+			class="z-3 outline outline-blue-400 transition-all"
+			[ngClass]="pot1Cards().length ? '' : 'opacity-40'"
+		/>
+		<ui-deck
+			#pot2
+			[animate]="animate()"
+			[cards]="pot2Cards()"
+			layout="stack"
+			[faceDown]="true"
+			class="z-3 outline outline-red-400 transition-all"
+			[ngClass]="pot2Cards().length ? '' : 'opacity-40'"
+		/>
+	</footer>
+
+	<!-- SUD (in basso) -->
+	<div
+		class="w-full relative rounded-lg outline transition-all duration-300"
+		[ngClass]="
+			currentPlayer() === PlayerSide.South
+				? 'outline-2 outline-green-400 bg-green-400/10 shadow-[0_0_16px_2px_rgba(74,222,128,0.55)]'
+				: 'outline-white/15'
+		"
+	>
+		<span
+			class="absolute top-1 left-1 z-10 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider pointer-events-none select-none transition-colors duration-300"
+			[ngClass]="
+				currentPlayer() === PlayerSide.South
+					? 'bg-green-500 text-white animate-pulse'
+					: 'bg-black/40 text-white/50'
+			"
+			>SUD</span
+		>
+		<ui-deck
+			#southDeck
+			[animate]="animate()"
+			layout="horizontal"
+			[cards]="southCards()"
+			[selectable]="canPlay()"
+			[faceDown]="false"
+			class="z-3 place-content-center"
+		/>
+	</div>
+
+	<img class="absolute left-0 top-0 w-full h-full -z-10" src="/images/table_bg.jpg" />
 </div>

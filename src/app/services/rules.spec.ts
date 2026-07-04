@@ -55,22 +55,30 @@ describe('Rules', () => {
 	});
 
 	it('reject double A', () => {
-		const result = service.validateRun('A♥️ 2♥️ 3♥️ 4♥️ 5♥️ 6♥️ 7♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️ K♥️ A♥️');
+		const result = service.validateRun(
+			'A♥️ 2♥️ 3♥️ 4♥️ 5♥️ 6♥️ 7♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️ K♥️ A♥️',
+		);
 		expect(result).toBeNull();
 	});
 
 	it('accept complete run of 14 cards (last Jocker)', () => {
-		const result = service.validateRun('A♥️ 2♥️ 3♥️ 4♥️ 5♥️ 6♥️ 7♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️ K♥️ *');
+		const result = service.validateRun(
+			'A♥️ 2♥️ 3♥️ 4♥️ 5♥️ 6♥️ 7♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️ K♥️ *',
+		);
 		expect(result).not.toBeNull();
 	});
 
 	it('reject complete run of 14 cards double wild', () => {
-		const result = service.validateRun('3♥️ 4♥️ 8♥️ 9♥️ 10♥️ J♥️ 5♥️ 6♥️ 7♥️ A♥️ 2♠️ Q♥️ K♥️ *');
+		const result = service.validateRun(
+			'3♥️ 4♥️ 8♥️ 9♥️ 10♥️ J♥️ 5♥️ 6♥️ 7♥️ A♥️ 2♠️ Q♥️ K♥️ *',
+		);
 		expect(result).toBeNull();
 	});
 
 	it('accept complete run of 14 cards (first Jocker)', () => {
-		const result = service.validateRun('* 2♥️ 3♥️ 4♥️ 5♥️ 6♥️ 7♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️ K♥️ A♥️');
+		const result = service.validateRun(
+			'* 2♥️ 3♥️ 4♥️ 5♥️ 6♥️ 7♥️ 8♥️ 9♥️ 10♥️ J♥️ Q♥️ K♥️ A♥️',
+		);
 		expect(result).not.toBeNull();
 	});
 

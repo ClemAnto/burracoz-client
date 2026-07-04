@@ -1,13 +1,13 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash(git -C /d/Projects/Burracoz/burracoz-client log --oneline -20)",
-      "Bash(yarn test:rules --no-sandbox)",
-      "Bash(yarn test:rules)",
-      "Bash(npx tsc --noEmit)",
-      "Bash(npx ng build)",
-      "Bash(python -c \":*)",
-      "Bash(python3 -c \":*)"
-    ]
-  }
+	"permissions": {
+		"allow": [
+			"Bash(git -C /d/Projects/Burracoz/burracoz-client log --oneline -20)",
+			"Bash(yarn test:rules --no-sandbox)",
+			"Bash(yarn test:rules)",
+			"Bash(npx tsc --noEmit)",
+			"Bash(npx ng build)",
+			"Bash(python -c \":*)",
+			"Bash(python3 -c \":*)"
+		]
+	}
 }

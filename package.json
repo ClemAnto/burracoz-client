@@ -1,62 +1,62 @@
 {
-  "name": "burracoz-client",
-  "version": "0.0.0",
-  "scripts": {
-    "ng": "ng",
-    "start": "ng serve",
-    "build": "ng build",
-    "watch": "ng build --watch --configuration development",
-    "test": "ng test",
-    "test:rules": "ng test --watch=false --include src/app/services/rules.spec.ts",
-    "format": "prettier . --write --ignore-path .gitignore --ignore-unknown",
-    "format:check": "prettier . --check --ignore-path .gitignore --ignore-unknown"
-  },
-  "prettier": {
-    "printWidth": 100,
-    "singleQuote": true,
-    "useTabs": true,
-    "tabWidth": 4,
-    "overrides": [
-      {
-        "files": "*.html",
-        "options": {
-          "parser": "angular"
-        }
-      }
-    ]
-  },
-  "private": true,
-  "dependencies": {
-    "@angular/common": "^21.2.0",
-    "@angular/compiler": "^21.2.0",
-    "@angular/core": "^21.2.0",
-    "@angular/forms": "^21.2.0",
-    "@angular/platform-browser": "^21.2.0",
-    "@angular/router": "^21.2.0",
-    "@tailwindcss/postcss": "^4.1.12",
-    "ng-zorro-antd": "^21.1.0",
-    "postcss": "^8.5.6",
-    "rxjs": "~7.8.0",
-    "tailwindcss": "^4.1.12",
-    "tslib": "^2.3.0"
-  },
-  "devDependencies": {
-    "@angular/animations": "^21.2.0",
-    "@angular/build": "^21.1.4",
-    "@angular/cli": "^21.2.0",
-    "@angular/compiler-cli": "^21.2.0",
-    "@types/jasmine": "~5.1.0",
-    "jasmine-core": "~5.9.0",
-    "karma": "~6.4.0",
-    "karma-chrome-launcher": "~3.2.0",
-    "karma-coverage": "~2.2.0",
-    "karma-jasmine": "~5.1.0",
-    "karma-jasmine-html-reporter": "~2.1.0",
-    "less": "^4.4.1",
-    "less-loader": "^12.3.0",
-    "postcss": "^8.5.3",
-    "prettier": "^3.8.1",
-    "typescript": "~5.9.2"
-  },
-  "packageManager": "yarn@4.12.0"
+	"name": "burracoz-client",
+	"version": "0.0.0",
+	"scripts": {
+		"ng": "ng",
+		"start": "ng serve",
+		"build": "ng build",
+		"watch": "ng build --watch --configuration development",
+		"test": "ng test",
+		"test:rules": "ng test --watch=false --include src/app/services/rules.spec.ts",
+		"format": "prettier . --write --ignore-path .gitignore --ignore-unknown",
+		"format:check": "prettier . --check --ignore-path .gitignore --ignore-unknown"
+	},
+	"prettier": {
+		"printWidth": 100,
+		"singleQuote": true,
+		"useTabs": true,
+		"tabWidth": 4,
+		"overrides": [
+			{
+				"files": "*.html",
+				"options": {
+					"parser": "angular"
+				}
+			}
+		]
+	},
+	"private": true,
+	"dependencies": {
+		"@angular/common": "^21.2.0",
+		"@angular/compiler": "^21.2.0",
+		"@angular/core": "^21.2.0",
+		"@angular/forms": "^21.2.0",
+		"@angular/platform-browser": "^21.2.0",
+		"@angular/router": "^21.2.0",
+		"@tailwindcss/postcss": "^4.1.12",
+		"ng-zorro-antd": "^21.1.0",
+		"postcss": "^8.5.6",
+		"rxjs": "~7.8.0",
+		"tailwindcss": "^4.1.12",
+		"tslib": "^2.3.0"
+	},
+	"devDependencies": {
+		"@angular/animations": "^21.2.0",
+		"@angular/build": "^21.1.4",
+		"@angular/cli": "^21.2.0",
+		"@angular/compiler-cli": "^21.2.0",
+		"@types/jasmine": "~5.1.0",
+		"jasmine-core": "~5.9.0",
+		"karma": "~6.4.0",
+		"karma-chrome-launcher": "~3.2.0",
+		"karma-coverage": "~2.2.0",
+		"karma-jasmine": "~5.1.0",
+		"karma-jasmine-html-reporter": "~2.1.0",
+		"less": "^4.4.1",
+		"less-loader": "^12.3.0",
+		"postcss": "^8.5.3",
+		"prettier": "^3.8.1",
+		"typescript": "~5.9.2"
+	},
+	"packageManager": "yarn@4.12.0"
 }

@@ -16,7 +16,9 @@ export class LocalStorage {
 	set<T>(key: string, value: T): void {
 		try {
 			localStorage.setItem(key, JSON.stringify(value));
-		} catch { /* ignorato */ }
+		} catch {
+			/* ignorato */
+		}
 	}
 
 	/**
@@ -36,6 +38,8 @@ export class LocalStorage {
 	remove(key: string): void {
 		try {
 			localStorage.removeItem(key);
-		} catch { /* ignorato */ }
+		} catch {
+			/* ignorato */
+		}
 	}
 }

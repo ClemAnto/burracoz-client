@@ -3,50 +3,66 @@
 @let isVertical = layout() == 'vertical';
 
 @if (cards()) {
-	<div [attr.data-layout]="layout()"
+	<div
+		[attr.data-layout]="layout()"
 		class="place-content-inherit"
 		[ngClass]="{
-			'flex': isHorizontal || isVertical,
+			flex: isHorizontal || isVertical,
 			'w-full h-(--max-box-h) my-auto': isHorizontal,
 			'flex-col h-full w-(--max-box-w) mx-auto max-w-full': isVertical,
-			'grid h-(--box-h) w-(--box-w)': isStack
-		}">
+			'grid h-(--box-h) w-(--box-w)': isStack,
+		}"
+	>
 		@for (item of list(); track item.uid; let i = $index) {
-			<div class="card-pivot relative outline outline-dashed outline-amber-500"
-				[animate.enter]="animate() ? (isVertical ? 'max-h-from-0' : isHorizontal ? 'max-w-from-0' : '') : ''"
-				[animate.leave]="animate() ? (isVertical ? 'max-h-to-0' : isHorizontal ? 'max-w-to-0' : '') : ''"
+			<!-- NIENTE animate.enter/leave sul pivot: il @for SPOSTA le view nei
+			     riordini (detach+insert) e animate.leave interpretava lo spostamento
+			     come rimozione — differiva il detach e 200ms dopo eliminava DAL DOM
+			     elementi ancora vivi (carte "sparite" a ogni sort). Lo shift dei
+			     vicini è comunque animato dal FLIP dello scope (uiTweenScope). -->
+			<div
+				class="card-pivot relative"
+				[class.reorderable]="reorderable()"
+				[class.dragging]="draggingUid() === item.uid"
+				[style.touch-action]="reorderable() ? 'none' : null"
+				(pointerdown)="
+					reorderable() && onCardPointerDown($event, item.uid, $any($event.currentTarget))
+				"
 				[ngClass]="{
 					'w-[stretch] max-w-(--max-box-w)': isHorizontal,
 					'h-[stretch] max-h-(--max-box-h)': isVertical,
-					'col-[1/1] row-[1/1]': isStack
-				}">
-				
+					'col-[1/1] row-[1/1]': isStack,
+				}"
+			>
 				@let offset = isStack ? offsetCurve(i) : 0;
-				
+				<!-- Faccia RESA: override di prospettiva del deck, fallback stato fisico. -->
+				@let fd = renderFaceDown(item);
+				@let selected = selectedSet().has(item.uid);
+
+				<!-- tween-data: solo proprietà COMPOSITABILI (transform/rotate). Una
+				     custom property nei keyframe (es. --offset) costringerebbe l'INTERA
+				     animazione sul main thread — volo compreso — invece che sul
+				     compositor (GPU). -->
 				<ui-card
-					[style.--offset.px]="offset * (item.faceDown ? 1 : -1)"
+					[style.--offset.px]="offset * (fd ? 1 : -1)"
 					[style.--z]="i"
-					[style.--sel.px]="selectedSet().has(item.uid) ? -8 : 0"
+					[style.--sel.px]="selected ? -10 : 0"
 					(click)="toggleItem(item.uid)"
-					class="rounded-md z-(--z) *:translate-z-[calc(var(--prev-offset,var(--offset)))]"
-					[ngClass]="{
-						outline: selectedSet().has(item.uid),
-						
-					}"
-					[style.--tween-delay]="freezeds()[item.uid]"
+					class="rounded-md z-(--z) *:translate-z-(--offset)"
+					[ngClass]="
+						selected
+							? 'outline-2 outline-yellow-400 shadow-[0_0_10px_2px_rgba(250,204,21,0.65)]'
+							: ''
+					"
 					[attr.tween-id]="animate() ? item.uid : null"
 					[attr.tween-data]="
 						{
-							'--z': i,
-							'--prev-rot-y': item.faceDown ? '180deg' : '',
-							'--prev-offset': offset + 'px',
-							'--rotate': (rotate() ?? 0) + 'deg',
+							transform: 'rotateY(' + (fd ? 180 : 0) + 'deg)',
+							rotate: (rotate() ?? 0) + 'deg',
 						} | json
 					"
-					[faceDown]="item.faceDown"
-					[card]="item.tag"
+					[faceDown]="fd"
+					[item]="item"
 				/>
-				
 			</div>
 		}
 	</div>
