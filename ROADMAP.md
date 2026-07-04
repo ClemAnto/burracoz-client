@@ -1,7 +1,7 @@
 # Burracoz — Roadmap verso il prodotto completo
 
 > Angular 21 (standalone, signals) · ng-zorro + Tailwind 4 · client-only
-> Stato documento: aggiornato al 2026-07-05 (3ª sessione). **Giocabile davvero da un umano** (default "gioco vero": SUD umano+scoperto, EST/NORD/OVEST IA+coperti) tramite la **modale Impostazioni** (per-posto IA/carte scoperte + velocità). Suite 68/68 verde. ⚠️ Il primo blocco (marcatura burraco + fix sfondo Pages) è pubblicato; **il resto della 3ª sessione è nel working tree, non ancora committato**.
+> Stato documento: aggiornato al 2026-07-05 (3ª sessione). **Giocabile davvero da un umano** (default "gioco vero": SUD umano+scoperto, EST/NORD/OVEST IA+coperti) tramite la **modale Impostazioni** (per-posto IA/carte scoperte + velocità). Suite 68/68 verde. **Committato e pubblicato** su GitHub Pages (commit `2822429`).
 
 Gioco di Burraco (regole F.I.Bur. italiane). Architettura:
 **Game** (facade multi-mano) → **Round** (logica di una mano) → **Rules** (validazione giochi).
@@ -85,11 +85,10 @@ UI: **Board** → **Deck** → **Card** con FLIP custom (**Tweener**).
 
 ## 🎯 Prossimo passo consigliato
 
-**Committare/pubblicare la 3ª sessione** (dopo `yarn format`), poi **potenziare la strategia IA** (Fase 2: scale asso-alto, meld-finder, scarto intelligente, uso di `patience`/`pointGreed`/`cooperation`). Il **profiler-clone** è il grande "nice to have" successivo.
+**Potenziare la strategia IA** (Fase 2: scale asso-alto, meld-finder, scarto intelligente, uso di `patience`/`pointGreed`/`cooperation`). Poi commenti di zona nel template. Il **profiler-clone** è il grande "nice to have" successivo.
 
 ## 🐞 Debito tecnico noto
 
-- **3ª sessione non committata**: lavoro nel working tree; committare dopo `yarn format` (gate CI `format:check`).
 - **Strategia IA semplice**: greedy, niente scale con asso alto; `patience`/`pointGreed`/`cooperation` non ancora sfruttati nelle decisioni.
 - **Dimensione carta globale** (`CARD_SIZE` in deck.ts): su mobile con MOLTI giochi non si rimpiccioliscono le carte come fallback (oggi si riduce solo l'offset verticale) → in casi estremi l'area `overflow-hidden` potrebbe clippare oltre le 2 righe.
 - **Deploy Pages transitorio**: lo step `deploy-pages` fallisce spesso con "try again later" (build ok); rilanciare `gh workflow run deploy.yml`.
