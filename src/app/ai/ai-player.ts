@@ -29,17 +29,29 @@ export interface AiProfile {
 	wildUsage: number;
 	/** 0 = indifferente a cosa scarta · 1 = evita di servire gli avversari. */
 	discardCaution: number;
-	/** 0 = gioca per sé · 1 = favorisce il compagno (appoggi, carte tenute). */
+	/** 0 = gioca per sé · 1 = gioca di SQUADRA: apre più giochi a terra (costruisce meno
+	 *  combinazioni in mano), evita di chiudere se il compagno è pieno di carte, e coordina
+	 *  i RUOLI per il pozzetto (se il compagno accumula si svuota lui per prenderlo, e
+	 *  viceversa). Legge il conteggio carte del compagno (`partnerHandCount`). */
 	cooperation: number;
 	/** 0 = impulsivo, decide sul momento · 1 = pianifica a lungo termine. */
 	patience: number;
-	/** 0 = dimentica in fretta / traccia male · 1 = ricorda tutte le carte uscite
-	 *  e modella le tendenze degli avversari (card counting). Memoria EPISODICA,
-	 *  azzerata a ogni mano. */
-	memory: number;
+	/** Attenzione: quanto l'IA percepisce e VALUTA lo stato. 0 = distratta, ignora
+	 *  perfino le carte in mano e sul tavolo (gioca a caso) e non ricorda nulla di ciò
+	 *  che è uscito · 0.5 = via di mezzo, valuta mano+tavolo ma dimentica parte delle
+	 *  carte uscite (quadro parziale, possibili attese a vuoto) · 1 = pienamente attenta:
+	 *  valuta tutto e ricorda esattamente le carte uscite (card counting). Governa la
+	 *  memoria EPISODICA (azzerata a ogni mano). Di norma cresce con `experience`, ma
+	 *  resta un asse a sé (si può avere un esperto distratto). */
+	attention: number;
 	/** 0 = non impara nulla tra le partite · 1 = accumula conoscenza a lungo
 	 *  termine (tendenze avversari, auto-taratura) persistita localmente. */
 	learning: number;
+	/** Esperienza: 0 = neofita (gioca in modo locale/ingenuo) · 1 = professionista
+	 *  (fa una valutazione strategica GLOBALE leggendo il punteggio partita: affretta
+	 *  la chiusura se è vicino alla vittoria; rinuncia a chiudere per fare più punti
+	 *  quando la vittoria è lontana). Solo i valori alti attivano questo ragionamento. */
+	experience: number;
 
 	// ── Voce ──
 	/** 0 = silenzioso · 1 = chiacchierone (frequenza dei commenti). */
@@ -110,9 +122,9 @@ export interface TableEvent {
 
 /**
  * Vista read-only dello stato passata all'IA per decidere. Proietta sia lo
- * stato della mano corrente sia quello della partita. Non contiene le mani
- * altrui (informazione nascosta): ciò che l'IA sa degli altri sta nella sua
- * memoria privata, costruita via `observe`.
+ * stato della mano corrente sia quello della partita. Non contiene il CONTENUTO
+ * delle mani altrui (informazione nascosta): ciò che l'IA sa degli altri sta nella
+ * sua memoria privata (`observe`). Il solo CONTEGGIO delle carte è invece pubblico.
  */
 export interface GameView {
 	// Identità del giocatore IA
@@ -123,6 +135,9 @@ export interface GameView {
 
 	// Stato della mano corrente
 	hand: DeckItem[];
+	/** Quante carte ha in mano il compagno (conteggio PUBBLICO, non il contenuto).
+	 *  Usato dal gioco di squadra: ruoli per il pozzetto, non chiudere lasciandolo pieno. */
+	partnerHandCount: number;
 	discardPile: DeckItem[];
 	discardTop: DeckItem | null;
 	drawPileCount: number;
@@ -130,6 +145,11 @@ export interface GameView {
 	theirMelds: DeckItem[][];
 	potTakenByTeam: boolean;
 	teamHasBurraco: boolean;
+	/** La squadra avversaria ha preso il proprio pozzetto (stato PUBBLICO). */
+	opponentsTookPot: boolean;
+	/** Carte in mano a ciascun avversario (parallelo a `opponents`; conteggio PUBBLICO).
+	 *  Usato per fiutare una chiusura imminente e sgombrare le penalità pesanti. */
+	opponentHandCounts: number[];
 
 	// Stato della partita
 	matchScore: { ours: number; opponents: number };

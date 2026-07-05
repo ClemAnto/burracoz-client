@@ -851,16 +851,19 @@ export class Board implements AfterViewInit {
 		const team = TEAM_BY_PLAYER[player];
 		const otherTeam: RoundTeam = team === 'ours' ? 'opponents' : 'ours';
 		const partner = this.partnerOf(player);
+		const opponents = this.opponentsOf(player);
 		const melds = this.game.melds();
 		const total = this.game.totalScore();
 		const potFlags = this.game.playerHasTakenPot();
+		const hands = this.game.hands();
 		const discardPile = this.game.discardPile();
 		return {
 			me: player,
 			team,
 			partner,
-			opponents: this.opponentsOf(player),
-			hand: this.game.hands()[player],
+			opponents,
+			hand: hands[player],
+			partnerHandCount: hands[partner].length,
 			discardPile,
 			discardTop: discardPile.at(-1) ?? null,
 			drawPileCount: this.game.drawPile().length,
@@ -868,6 +871,8 @@ export class Board implements AfterViewInit {
 			theirMelds: melds[otherTeam],
 			potTakenByTeam: potFlags[player] || potFlags[partner],
 			teamHasBurraco: this.game.teamHasBurraco()[team],
+			opponentsTookPot: opponents.some((o) => potFlags[o]),
+			opponentHandCounts: opponents.map((o) => hands[o].length),
 			matchScore: team === 'ours' ? total : { ours: total.opponents, opponents: total.ours },
 			targetScore: this.game.targetScore(),
 			handIndex: this.game.handIndex(),

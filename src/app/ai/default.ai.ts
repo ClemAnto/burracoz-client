@@ -1,4 +1,4 @@
-import { DeckItem, getCardRank } from '../services/cards';
+import { CardValue, DeckItem, getCardRank, SuitTag } from '../services/cards';
 import { RoundPlayer } from '../services/round';
 import { isWild, Rules } from '../services/rules';
 import {
@@ -18,6 +18,44 @@ import {
 	TableEvent,
 } from './ai-player';
 
+/** Atteggiamento nella fase gioca: chiudere presto o accumulare punti (punto 4). */
+type PlayStance = 'rush' | 'accumulate';
+
+/** Sotto questa soglia di carte nel tallone si smette di attendere e si concreta. */
+const LOW_STOCK = 6;
+
+/** Frazione del target oltre la quale una squadra è "vicina alla vittoria" (punto 4). */
+const NEAR_WIN_FRACTION = 0.85;
+
+/** Esperienza minima per attendere combinazioni migliori invece di calare subito:
+ *  sotto questa soglia è un neofita che mette i punti a terra senza strategia. */
+const HOLD_MIN_EXPERIENCE = 0.4;
+
+/** Esperienza minima per leggere il punteggio partita e decidere se affrettare la chiusura. */
+const GLOBAL_EVAL_MIN_EXPERIENCE = 0.6;
+
+/** Attenzione da cui in su la valutazione di mano+tavolo è SEMPRE attiva; sotto, cala
+ *  linearmente fino a spegnersi a 0 (giocatore completamente distratto). */
+const BOARD_FOCUS_FULL = 0.3;
+
+/** Cooperazione minima per il gioco di squadra (ruoli pozzetto, non chiudere sul compagno pieno). */
+const COOP_MIN = 0.5;
+
+/** Mano del compagno considerata "piena" (parte da 11): non chiudere, e vado io al pozzetto. */
+const PARTNER_FULL = 8;
+
+/** Mano del compagno "quasi pronta": si sta svuotando (va lui al pozzetto), accumulo io. */
+const PARTNER_LOW = 4;
+
+/** Carte in mano a un avversario sotto cui la sua chiusura è imminente (parte da 11). */
+const OPPONENT_CLOSE_HAND = 4;
+
+/** Carte avversarie sotto cui la chiusura è al turno successivo: attenzione MASSIMA allo scarto. */
+const OPPONENT_CLOSE_IMMINENT = 1;
+
+/** Scarti minimi osservati da un avversario per inferire cosa NON scarta (→ raccoglie). */
+const WANT_MIN_DISCARDS = 4;
+
 /** Opzioni di costruzione di una IA. */
 export interface DefaultAiOptions {
 	id: string;
@@ -35,7 +73,7 @@ export interface DefaultAiOptions {
  * decisioni (non muta lo stato: è la Board a eseguirle → single-writer).
  *
  * Stateful solo nella propria memoria: episodica (carte uscite + tendenze
- * avversari, azzerata a ogni mano, capacità = `memory`) e a lungo termine
+ * avversari, azzerata a ogni mano, fedeltà = `attention`) e a lungo termine
  * (record testa-a-testa + tendenze, persistita, capacità = `learning`).
  *
  * Le personalità estendono questa classe fornendo profilo e `PhraseBank`
@@ -83,6 +121,11 @@ export class DefaultAi implements AiPlayer {
 			return { value: 'stock', reason: 'Monte scarti vuoto: pesco dal tallone.' };
 		}
 
+		// Attenzione: se sono distratto non valuto nemmeno il monte scarti.
+		if (!this.attendsBoard()) {
+			return { value: 'stock', reason: 'Distratto: non guardo il monte, pesco dal tallone.' };
+		}
+
 		const topUseful = this.discardTopUseful(view);
 		const sizeAppeal = Math.min(pile.length, 12) / 12; // 0..1
 		const score = (topUseful ? 0.6 : 0) + this.profile.pileAppetite * (0.3 + 0.4 * sizeAppeal);
@@ -106,7 +149,7 @@ export class DefaultAi implements AiPlayer {
 	private discardTopUseful(view: GameView): boolean {
 		const top = view.discardTop;
 		if (!top) return false;
-		const allowWild = this.allowsWild();
+		const allowWild = this.allowsWild(view);
 
 		const before = totalCards(this.findOpenMelds(view.hand, view.rules, allowWild));
 		const after = totalCards(this.findOpenMelds([...view.hand, top], view.rules, allowWild));
@@ -120,14 +163,39 @@ export class DefaultAi implements AiPlayer {
 	// ============================================================
 
 	decidePlays(view: GameView): AiDecision<AiPlay[]> {
-		const allowWild = this.allowsWild();
-		const opens = this.findOpenMelds(view.hand, view.rules, allowWild);
+		// Attenzione: se sono distratto non scandaglio mano e tavolo per i giochi.
+		if (!this.attendsBoard()) {
+			return { value: [], reason: 'Distratto: non valuto mano e tavolo, non calo nulla.' };
+		}
+
+		const allowWild = this.allowsWild(view);
+		// Sotto minaccia si completano i burraco anche sporcandoli con le matte.
+		const opens = this.findOpenMelds(
+			view.hand,
+			view.rules,
+			allowWild,
+			this.opponentClosingThreat(view),
+		);
 		const usedByOpens = new Set<number>(opens.flat().map((c) => c.uid));
 		const remaining = view.hand.filter((c) => !usedByOpens.has(c.uid));
 		const attachments = this.findAttachments(remaining, view.myMelds, view.rules);
 
+		// Punto 4: chiudere presto o accumulare punti.
+		const stance = this.closingStance(view);
+
+		// Punti 2-3: alcuni giochi li TRATTENIAMO invece di calarli subito (aspettando
+		// di allungarli o di farne un burraco). Le carte trattenute restano in mano
+		// (già escluse da `remaining`, quindi non vengono nemmeno appoggiate). Le legate
+		// ai giochi già a terra le facciamo sempre: avanzano verso il burraco senza esporci.
+		const held: DeckItem[][] = [];
+		const opensToPlay = opens.filter((meld) => {
+			const hold = this.shouldHoldMeld(meld, view, stance);
+			if (hold) held.push(meld);
+			return !hold;
+		});
+
 		let plays: AiPlay[] = [
-			...opens.map((cards) => ({ kind: 'open' as const, cards })),
+			...opensToPlay.map((cards) => ({ kind: 'open' as const, cards })),
 			...attachments,
 		];
 
@@ -138,28 +206,203 @@ export class DefaultAi implements AiPlayer {
 			trimmed = true;
 		}
 
-		const reason = plays.length
-			? `Calo ${plays.filter((p) => p.kind === 'open').length} giochi e appoggio ${
-					plays.filter((p) => p.kind === 'attach').length
-				} volte (matte ${allowWild ? 'ammesse' : 'evitate'})${
-					trimmed ? '; trattengo una carta per lo scarto' : ''
-				}.`
-			: 'Nessun gioco valido da calare o appoggiare.';
+		// Riserva di scarto sicuro: non calare fino a restare con soli scarti che
+		// servono l'avversario. Meglio tenere un gioco in mano (preferibilmente un
+		// tris: blocca poco ed è ottimo come banca scarti) che essere costretti a
+		// dare punti/appoggi. I prudenti (`discardCaution`) ci tengono di più, ma è
+		// comunque un accorgimento da esperti (il neofita cala e basta). In 'rush' si
+		// ignora: si punta a svuotare la mano e chiudere.
+		if (
+			this.profile.experience >= HOLD_MIN_EXPERIENCE &&
+			this.profile.discardCaution >= 0.4 &&
+			stance !== 'rush'
+		) {
+			let guard = plays.length;
+			while (guard-- > 0 && !this.hasSafeDiscardAfter(plays, view)) {
+				const index = pickMeldToHoldForDiscard(plays);
+				if (index < 0) break;
+				held.push(plays.splice(index, 1)[0].cards);
+			}
+		}
 
-		return { value: plays, reason };
+		return { value: plays, reason: this.explainPlays(plays, held, stance, allowWild, trimmed) };
 	}
 
-	/** Matte ammesse nei giochi in base al profilo. */
-	protected allowsWild(): boolean {
-		return this.profile.wildUsage >= 0.35;
+	/**
+	 * Una carta è uno scarto SICURO se non serve l'avversario: non è una matta e non
+	 * è appoggiabile a un loro gioco a terra (non dà punti né sblocca legate).
+	 */
+	protected isSafeDiscard(card: DeckItem, view: GameView): boolean {
+		if (isWild(card)) return false;
+		return !view.theirMelds.some((m) => !!view.rules.validateMeld([card], m));
+	}
+
+	/** Dopo aver calato `plays`, resterebbe in mano almeno uno scarto sicuro? */
+	protected hasSafeDiscardAfter(plays: AiPlay[], view: GameView): boolean {
+		const played = new Set<number>(plays.flatMap((p) => p.cards.map((c) => c.uid)));
+		return view.hand.some((c) => !played.has(c.uid) && this.isSafeDiscard(c, view));
+	}
+
+	/**
+	 * Strategia di chiusura (punto 4). Finché non possiamo chiudere (pozzetto preso +
+	 * burraco in campo) l'obiettivo è COSTRUIRE → 'accumulate'.
+	 *
+	 * Quando POSSIAMO chiudere, le IA ESPERTE (`experience` alta) fanno una valutazione
+	 * GLOBALE sul punteggio partita: se qualcuno è vicino alla vittoria affrettano la
+	 * chiusura ('rush'), altrimenti sfruttano la mano per fare più punti ('accumulate').
+	 * I neofiti non guardano il tabellone: decidono solo sull'avidità di punti.
+	 *
+	 * La COOPERAZIONE (`cooperativeStance`) ha priorità: coordina i ruoli col compagno
+	 * per il pozzetto e impedisce di chiudere lasciandolo pieno di carte.
+	 */
+	protected closingStance(view: GameView): PlayStance {
+		// Minaccia di chiusura avversaria: sgombra la mano (rush) per non farti sorprendere
+		// con molte carte — e penalità — in mano. Priorità massima.
+		if (this.opponentClosingThreat(view)) return 'rush';
+
+		const canClose = view.potTakenByTeam && view.teamHasBurraco;
+
+		let base: PlayStance;
+		if (!canClose) {
+			base = 'accumulate';
+		} else if (this.profile.experience >= GLOBAL_EVAL_MIN_EXPERIENCE) {
+			const nearWin = view.matchScore.ours >= view.targetScore * NEAR_WIN_FRACTION;
+			const oppNearWin = view.matchScore.opponents >= view.targetScore * NEAR_WIN_FRACTION;
+			// Pochi punti alla vittoria (nostra o loro) → chiudi e porta a casa; altrimenti
+			// la mano vale: prova a fare più punti evitando di chiudere in fretta.
+			base = nearWin || oppNearWin ? 'rush' : 'accumulate';
+		} else {
+			base = this.profile.pointGreed >= 0.6 ? 'accumulate' : 'rush';
+		}
+
+		return this.cooperativeStance(view, base);
+	}
+
+	/**
+	 * Correzione di squadra allo stance (punti 2-3), attiva con `cooperation` ≥ `COOP_MIN`.
+	 * - Ruoli per il POZZETTO: finché la squadra non l'ha preso, se il compagno accumula
+	 *   (mano piena) mi svuoto io per prenderlo ('rush'); se è lui a svuotarsi (mano quasi
+	 *   pronta) lo lascio fare e accumulo ('accumulate').
+	 * - Non CHIUDERE lasciando il compagno pieno di carte: annulla un 'rush' → 'accumulate'.
+	 */
+	protected cooperativeStance(view: GameView, base: PlayStance): PlayStance {
+		if (this.profile.cooperation < COOP_MIN) return base;
+		const partnerCards = view.partnerHandCount;
+
+		if (!view.potTakenByTeam) {
+			if (partnerCards >= PARTNER_FULL) return 'rush'; // compagno carico → vado io al pozzetto
+			if (partnerCards <= PARTNER_LOW) return 'accumulate'; // compagno pronto → glielo lascio
+		}
+
+		if (base === 'rush' && partnerCards >= PARTNER_FULL) return 'accumulate'; // non chiudo sul compagno pieno
+		return base;
+	}
+
+	/**
+	 * Un avversario sta per chiudere? (vista delle carte avversarie): la loro squadra
+	 * ha preso il pozzetto e ha già un burraco (≥7) e uno di loro ha pochissime carte
+	 * (≤`OPPONENT_CLOSE_HAND`). In tal caso conviene sgombrare la mano e le penalità
+	 * pesanti (jolly/pinelle valgono -30/-20 se ci sorprendono con esse in mano).
+	 */
+	protected opponentClosingThreat(view: GameView): boolean {
+		if (!view.opponentsTookPot) return false;
+		if (!view.theirMelds.some((m) => m.length >= 7)) return false;
+		return view.opponentHandCounts.some((n) => n <= OPPONENT_CLOSE_HAND);
+	}
+
+	/**
+	 * Un avversario può chiudere con UNA sola carta (pozzetto + burraco già in campo):
+	 * chiusura al turno successivo → attenzione MASSIMA allo scarto (mai servirlo, mai
+	 * distrarsi). Sottoinsieme più stretto di `opponentClosingThreat`.
+	 */
+	protected opponentClosingImminent(view: GameView): boolean {
+		if (!view.opponentsTookPot) return false;
+		if (!view.theirMelds.some((m) => m.length >= 7)) return false;
+		return view.opponentHandCounts.some((n) => n <= OPPONENT_CLOSE_IMMINENT);
+	}
+
+	/**
+	 * Vale la pena TRATTENERE un gioco invece di calarlo subito (punti 1-2-3)?
+	 * - Un burraco (≥7) si cala sempre: sono punti concreti.
+	 * - In 'rush' (punto 4) o con tallone quasi finito si concreta tutto.
+	 * - Un gioco BLOCCATO (nessun completatore ancora vivo, punto 3) non si aspetta.
+	 * - Un tris nudo (punto 1: i tris bloccano) i pazienti lo tengono per non impegnarsi.
+	 * - Una scala corta con completatori vivi (punto 2) i pazienti la aspettano per
+	 *   allungarla verso il burraco: tanto più volentieri quanto più il burraco che
+	 *   ne verrebbe è PULITO (nessuna matta) o VICINO (già ≥6 carte).
+	 *
+	 * L'attesa è però una scelta da GIOCATORE ESPERTO: un neofita cala subito i punti
+	 * a terra (anche i tris), quindi sotto `HOLD_MIN_EXPERIENCE` non trattiene mai.
+	 * La COOPERAZIONE spinge ad aprire più giochi a terra e costruire meno in mano
+	 * (punto 1): alza la soglia di pazienza necessaria per trattenere.
+	 */
+	protected shouldHoldMeld(meld: DeckItem[], view: GameView, stance: PlayStance): boolean {
+		if (meld.length >= 7) return false;
+		if (stance === 'rush') return false;
+		if (this.profile.experience < HOLD_MIN_EXPERIENCE) return false;
+		if (view.drawPileCount <= LOW_STOCK) return false;
+		if (this.liveExtensionCount(meld) === 0) return false;
+		// Il cooperativo costruisce meno in mano: gli serve più pazienza per trattenere.
+		const coopPenalty = this.profile.cooperation * 0.3;
+		if (!isRunMeld(meld))
+			return meld.length === 3 && this.profile.patience >= 0.6 + coopPenalty;
+		// Un burraco pulito vale di più (bonus +200 vs +100/+150): lo si aspetta anche
+		// da meno pazienti; se è già vicino (≥6) ancora di più.
+		const clean = !runUsesWild(meld);
+		const threshold = (clean ? (meld.length >= 6 ? 0.2 : 0.4) : 0.6) + coopPenalty;
+		return this.profile.patience >= threshold;
+	}
+
+	/**
+	 * Quanti "completatori" del gioco risultano ancora VIVI SECONDO LA MIA MEMORIA
+	 * (punto 3). Per una scala sono le carte naturali adiacenti agli estremi nel seme;
+	 * per un set le altre copie dello stesso valore. 0 = lo so bloccato (le carte
+	 * cruciali le ricordo uscite). Chi ha poca `attention` ha un quadro parziale e può
+	 * contarne di vive più del reale (attese a vuoto).
+	 */
+	protected liveExtensionCount(meld: DeckItem[]): number {
+		return completerTags(meld).reduce((sum, tag) => sum + this.liveCopies({ tag }), 0);
+	}
+
+	/** Motivazione leggibile della fase gioca (per il debug delle decisioni). */
+	private explainPlays(
+		plays: AiPlay[],
+		held: DeckItem[][],
+		stance: PlayStance,
+		allowWild: boolean,
+		trimmed: boolean,
+	): string {
+		if (!plays.length && !held.length) return 'Nessun gioco valido da calare o appoggiare.';
+		const opens = plays.filter((p) => p.kind === 'open').length;
+		const attaches = plays.filter((p) => p.kind === 'attach').length;
+		const parts = [
+			plays.length ? `Calo ${opens} giochi e appoggio ${attaches} volte` : 'Non calo nulla',
+			stance === 'rush' ? 'punto a chiudere' : 'accumulo punti',
+		];
+		if (held.length) parts.push(`trattengo ${held.length} gioco/i (allungo o scarto sicuro)`);
+		parts.push(`matte ${allowWild ? 'ammesse' : 'evitate'}`);
+		if (trimmed) parts.push('tengo una carta per lo scarto');
+		return parts.join('; ') + '.';
+	}
+
+	/** Matte ammesse nei giochi: in base al profilo, o SEMPRE se un avversario sta per
+	 *  chiudere (meglio calare jolly/pinelle sul tavolo che tenerli in mano come penalità). */
+	protected allowsWild(view: GameView): boolean {
+		return this.profile.wildUsage >= 0.35 || this.opponentClosingThreat(view);
 	}
 
 	/**
 	 * Trova giochi apribili nella mano (set e sequenze), validati dal motore
 	 * regole (fonte di verità), e ne seleziona un insieme non sovrapposto.
-	 * Limite noto v1: non genera sequenze con asso alto (K-Q-...-A).
+	 * Con `forceBurraco` sporca i giochi vicini al burraco con una matta per
+	 * completarli subito (`dirtyToComplete`). Limite noto v1: no asso alto.
 	 */
-	protected findOpenMelds(cards: DeckItem[], rules: Rules, allowWild: boolean): DeckItem[][] {
+	protected findOpenMelds(
+		cards: DeckItem[],
+		rules: Rules,
+		allowWild: boolean,
+		forceBurraco = false,
+	): DeckItem[][] {
 		const candidates: DeckItem[][] = [];
 		const naturals = cards.filter((c) => !isWild(c));
 		const wilds = cards.filter((c) => isWild(c));
@@ -173,35 +416,42 @@ export class DefaultAi implements AiPlayer {
 			}
 		}
 
-		// SEQUENZA: per seme, segmenti di rank consecutivi (≥3).
+		// SEQUENZA: per seme, segmenti di rank consecutivi (≥3, o 2 + matta). Doppio
+		// passaggio: asso BASSO (A-2-3…) e, se c'è un asso, anche ALTO (…-Q-K-A).
 		const bySuit = groupBy(naturals, (c) => c.suit);
+		const wild = allowWild ? wilds[0] : undefined;
 		for (const group of bySuit.values()) {
-			const sorted = group
-				.slice()
-				.sort((a, b) => getCardRank(a.value) - getCardRank(b.value));
-			let segment: DeckItem[] = [];
-			let prevRank = -99;
-			const flush = () => {
-				if (segment.length >= 3) candidates.push(segment.slice());
-				else if (segment.length === 2 && allowWild && wilds.length) {
-					candidates.push([...segment, wilds[0]]);
-				}
-			};
-			for (const card of sorted) {
-				const rank = getCardRank(card.value);
-				if (rank === prevRank) continue; // doppione di rank: non entra nella stessa sequenza
-				if (rank === prevRank + 1) segment.push(card);
-				else {
-					flush();
-					segment = [card];
-				}
-				prevRank = rank;
+			candidates.push(...collectRunSegments(group, false, wild));
+			if (group.some((c) => c.value === 'A')) {
+				candidates.push(...collectRunSegments(group, true, wild));
 			}
-			flush();
 		}
 
 		const valid = candidates.filter((c) => !!rules.validateMeld(c));
-		return pickNonOverlapping(valid);
+		const picked = pickNonOverlapping(valid);
+		if (forceBurraco) this.dirtyToComplete(picked, cards, rules);
+		return picked;
+	}
+
+	/**
+	 * Sotto minaccia di chiusura: sporca i giochi vicini al burraco (6 carte) con una
+	 * matta ancora libera in mano per portarli a 7 SUBITO — meglio un burraco sporco
+	 * ora che un pulito domani, quando l'avversario potrebbe aver già chiuso. Muta
+	 * `picked` in place inserendo la matta nel gioco.
+	 */
+	private dirtyToComplete(picked: DeckItem[][], cards: DeckItem[], rules: Rules): void {
+		const used = new Set<number>(picked.flat().map((c) => c.uid));
+		const spareWilds = cards.filter((c) => isWild(c) && !used.has(c.uid));
+		for (const meld of picked) {
+			if (meld.length !== 6) continue; // solo 6 carte: +1 matta → burraco (7)
+			for (const wild of spareWilds) {
+				const completed = rules.validateMeld([wild], meld);
+				if (!completed) continue;
+				meld.splice(0, meld.length, ...Array.from(completed));
+				spareWilds.splice(spareWilds.indexOf(wild), 1);
+				break;
+			}
+		}
 	}
 
 	/** Appoggia carte della mano ai giochi già in tavola della propria squadra. */
@@ -232,6 +482,14 @@ export class DefaultAi implements AiPlayer {
 	// ============================================================
 
 	decideDiscard(view: GameView): AiDecision<DeckItem> {
+		// Attenzione MASSIMA se un avversario può chiudere con una sola carta: non ci si
+		// distrae MAI in quel frangente (si salta lo scarto sbadato anche da distratti).
+		const critical = this.opponentClosingImminent(view);
+		if (!critical && !this.attendsBoard()) return this.carelessDiscard(view);
+
+		// Minaccia di chiusura avversaria: sgombro le penalità pesanti (vedi metodo).
+		if (this.opponentClosingThreat(view)) return this.defensiveDiscard(view);
+
 		const ranking = this.discardRanking(view);
 		const chosen = view.hand.find((c) => c.uid === ranking[0]?.uid) ?? view.hand[0];
 		return {
@@ -240,6 +498,48 @@ export class DefaultAi implements AiPlayer {
 				ranking[0]?.note ? ', ' + ranking[0].note : ''
 			}).`,
 			detail: ranking,
+		};
+	}
+
+	/**
+	 * Sto valutando mano e tavolo in questa decisione? Probabilità = `attention`, ma
+	 * piena da `BOARD_FOCUS_FULL` in su: solo l'attenzione bassa comincia a ignorare
+	 * lo stato visibile, fino a spegnersi del tutto a 0.
+	 */
+	protected attendsBoard(): boolean {
+		return this.rng() < Math.min(1, this.profile.attention / BOARD_FOCUS_FULL);
+	}
+
+	/** Scarto sbadato: nessuna valutazione, una carta a caso (evitando le matte). */
+	protected carelessDiscard(view: GameView): AiDecision<DeckItem> {
+		const naturals = view.hand.filter((c) => !isWild(c));
+		const pool = naturals.length ? naturals : view.hand;
+		const chosen = pool[Math.min(Math.floor(this.rng() * pool.length), pool.length - 1)];
+		return { value: chosen, reason: 'Distratto: scarto senza valutare mano e tavolo.' };
+	}
+
+	/**
+	 * Scarto difensivo con un avversario in chiusura: mi libero della penalità più
+	 * pesante che NON serva a un loro gioco (per non regalargliela). Le matte non si
+	 * scartano — vanno calate sul tavolo (vedi `allowsWild` + stance `rush`), non
+	 * regalate a chi sta per chiudere; restano ultima risorsa solo se non c'è altro.
+	 */
+	protected defensiveDiscard(view: GameView): AiDecision<DeckItem> {
+		const ranked = view.hand
+			.map((card) => {
+				const servesThem = view.theirMelds.some(
+					(m) => !!view.rules.validateMeld([card], m),
+				);
+				// Priorità di scarto (più alta = prima): penalità alta, ma pesante malus se
+				// appoggiabile ai loro giochi o se è una matta (da calare, non da regalare).
+				const shed = pointsOf(card) - (servesThem ? 100 : 0) - (isWild(card) ? 60 : 0);
+				return { card, shed };
+			})
+			.sort((a, b) => b.shed - a.shed);
+		const chosen = ranked[0]?.card ?? view.hand[0];
+		return {
+			value: chosen,
+			reason: `Scarto ${chosen?.tag}: rischio chiusura avversaria, sgombro le penalità pesanti.`,
 		};
 	}
 
@@ -260,13 +560,20 @@ export class DefaultAi implements AiPlayer {
 				keep += potential * 8;
 				if (potential) notes.push(`potenziale ${potential.toFixed(1)}`);
 
-				// Pericolo di servire gli avversari (pesato da prudenza e memoria).
+				// Pericolo di servire gli avversari (pesato dalla prudenza). Le copie ancora
+				// "vive" sono quelle che RICORDO non uscite: chi ha poca attenzione le vede
+				// tutte vive uniformemente (contributo costante) → di fatto non conta le carte.
 				let danger = 0;
 				if (view.theirMelds.some((m) => !!view.rules.validateMeld([card], m))) {
 					danger += 6;
 					notes.push('appoggiabile dai loro');
 				}
-				danger += this.liveCopies(card) * this.profile.memory;
+				danger += this.liveCopies(card);
+				const wanted = this.opponentWantsValue(card.value);
+				if (wanted) {
+					danger += wanted * 4;
+					notes.push('cercata dai loro');
+				}
 				keep += danger * this.profile.discardCaution;
 
 				// Leggera preferenza a liberarsi delle carte alte "morte".
@@ -306,8 +613,24 @@ export class DefaultAi implements AiPlayer {
 	}
 
 	/** Copie di questa carta non ancora viste uscire (0..2 nel mazzo doppio). */
-	protected liveCopies(card: DeckItem): number {
+	protected liveCopies(card: { tag: string }): number {
 		return Math.max(0, 2 - (this.seen.get(card.tag) ?? 0));
+	}
+
+	/**
+	 * Quanto un avversario sembra CERCARE questo valore (modello del contenuto delle
+	 * mani altrui): chi scarta parecchio ma non ha MAI scartato questo valore
+	 * probabilmente lo sta raccogliendo → rischioso servirglielo. Segnale 0..n pesato
+	 * dall'attenzione (chi non osserva non lo coglie).
+	 */
+	protected opponentWantsValue(value: string): number {
+		let signal = 0;
+		for (const model of Object.values(this.opponentModel)) {
+			const total = Object.values(model.discardsByValue).reduce((sum, n) => sum + n, 0);
+			if (total < WANT_MIN_DISCARDS) continue;
+			if (!model.discardsByValue[value]) signal += 1;
+		}
+		return signal * this.profile.attention;
 	}
 
 	// ============================================================
@@ -321,9 +644,14 @@ export class DefaultAi implements AiPlayer {
 			return;
 		}
 
+		// Fedeltà di registrazione = `attention`: la pienamente attenta (1) registra ogni
+		// carta vista uscire, la distratta (0) nulla, la via di mezzo dimentica ~metà →
+		// quadro parziale (può credere ancora viva una carta già uscita).
 		if (event.cards) {
 			for (const card of event.cards) {
-				this.seen.set(card.tag, (this.seen.get(card.tag) ?? 0) + 1);
+				if (this.rng() < this.profile.attention) {
+					this.seen.set(card.tag, (this.seen.get(card.tag) ?? 0) + 1);
+				}
 			}
 		}
 
@@ -483,16 +811,129 @@ function groupBy<T, K>(items: T[], key: (item: T) => K): Map<K, T[]> {
 	return map;
 }
 
-/** Seleziona giochi non sovrapposti, preferendo i più lunghi (più vicini al burraco). */
+/**
+ * Seleziona giochi non sovrapposti preferendo le SCALE ai set (punto 1: i tris
+ * bloccano, le scale si gestiscono meglio nel lungo periodo) e, a parità, i più
+ * lunghi (più vicini al burraco).
+ */
 function pickNonOverlapping(melds: DeckItem[][]): DeckItem[][] {
 	const picked: DeckItem[][] = [];
 	const used = new Set<number>();
-	for (const meld of melds.slice().sort((a, b) => b.length - a.length)) {
+	const ordered = melds.slice().sort((a, b) => {
+		const runDiff = +isRunMeld(b) - +isRunMeld(a);
+		return runDiff || b.length - a.length;
+	});
+	for (const meld of ordered) {
 		if (meld.some((c) => used.has(c.uid))) continue;
 		meld.forEach((c) => used.add(c.uid));
 		picked.push(meld);
 	}
 	return picked;
+}
+
+/**
+ * Segmenti di rank consecutivi (≥3, o 2 + matta) tra le naturali di un seme.
+ * `aceHigh` posiziona l'asso in alto (rank 14) per generare le scale ...-Q-K-A.
+ */
+function collectRunSegments(group: DeckItem[], aceHigh: boolean, wild?: DeckItem): DeckItem[][] {
+	const out: DeckItem[][] = [];
+	const rankOf = (c: DeckItem) => getCardRank(c.value, aceHigh);
+	const sorted = group.slice().sort((a, b) => rankOf(a) - rankOf(b));
+	let segment: DeckItem[] = [];
+	let prevRank = -99;
+	const flush = () => {
+		if (segment.length >= 3) out.push(segment.slice());
+		else if (segment.length === 2 && wild) out.push([...segment, wild]);
+	};
+	for (const cardItem of sorted) {
+		const rank = rankOf(cardItem);
+		if (rank === prevRank) continue; // doppione di rank: non entra nella stessa sequenza
+		if (rank === prevRank + 1) segment.push(cardItem);
+		else {
+			flush();
+			segment = [cardItem];
+		}
+		prevRank = rank;
+	}
+	flush();
+	return out;
+}
+
+/** Un gioco è una SCALA se le sue carte naturali non hanno tutte lo stesso valore. */
+function isRunMeld(meld: DeckItem[]): boolean {
+	const naturals = meld.filter((c) => !isWild(c));
+	return naturals.length >= 2 && naturals.some((c) => c.value !== naturals[0].value);
+}
+
+/**
+ * Una scala usa una MATTA (→ burraco non pulito)? Joker sempre; un 2 solo se non è
+ * il 2 naturale del seme della scala. Proxy dell'`classifyBurraco` del Round senza
+ * dipendere da rules (l'IA resta pura sullo stato).
+ */
+function runUsesWild(meld: DeckItem[]): boolean {
+	const suit = meld.find((c) => c.value !== '2' && c.value !== '*')?.suit;
+	return meld.some((c) => c.value === '*' || (c.value === '2' && c.suit !== suit));
+}
+
+/**
+ * Indice del gioco da trattenere come banca scarti (punto B): preferisce i SET (i
+ * tris bloccano poco ed è meglio scartarli) alle scale, e i più corti. -1 se in
+ * `plays` non ci sono aperture (le legate non si spezzano: sono sicure e utili).
+ */
+function pickMeldToHoldForDiscard(plays: AiPlay[]): number {
+	let best = -1;
+	let bestKey = Infinity;
+	plays.forEach((play, index) => {
+		if (play.kind !== 'open') return;
+		const key = (isRunMeld(play.cards) ? 1000 : 0) + play.cards.length;
+		if (key < bestKey) {
+			bestKey = key;
+			best = index;
+		}
+	});
+	return best;
+}
+
+/**
+ * Tag delle carte che ESTENDEREBBERO un gioco, per stimare se è ancora completabile
+ * (punti 2-3). Scala: le naturali adiacenti agli estremi nel seme (asso alto escluso,
+ * come in `findOpenMelds` v1). Set: le altre copie dello stesso valore, tutti i semi.
+ */
+function completerTags(meld: DeckItem[]): string[] {
+	const naturals = meld.filter((c) => !isWild(c));
+	if (!naturals.length) return [];
+
+	if (isRunMeld(meld)) {
+		const suit = naturals[0].suit;
+		const ranks = naturals.map((c) => getCardRank(c.value));
+		const below = rankToValue(Math.min(...ranks) - 1);
+		const above = rankToValue(Math.max(...ranks) + 1);
+		return [below, above].filter((v): v is CardValue => !!v).map((v) => v + SuitTag[suit]);
+	}
+
+	const value = naturals[0].value;
+	return Object.values(SuitTag).map((tag) => value + tag);
+}
+
+const RANK_VALUES: Record<number, CardValue> = {
+	1: 'A',
+	2: '2',
+	3: '3',
+	4: '4',
+	5: '5',
+	6: '6',
+	7: '7',
+	8: '8',
+	9: '9',
+	10: '10',
+	11: 'J',
+	12: 'Q',
+	13: 'K',
+};
+
+/** Valore corrispondente a un rank 1..13 (null fuori range: niente asso alto in v1). */
+function rankToValue(rank: number): CardValue | null {
+	return RANK_VALUES[rank] ?? null;
 }
 
 function totalCards(melds: DeckItem[][]): number {
