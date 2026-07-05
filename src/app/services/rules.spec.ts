@@ -117,4 +117,16 @@ describe('Rules', () => {
 		expect(result).not.toBeNull();
 		expect(result!.length).toBe(5);
 	});
+
+	it('releases an incastro wild on a stored (descending) run', () => {
+		// Scala memorizzata DECRESCENTE 7♥ [*=6♥] 5♥: appoggiare il 6♥ naturale deve
+		// LIBERARE la matta (mossa legale e frequente). Regressione: getIncastroTag
+		// calcolava il tag di sostituzione senza il verso dell'array → sull'ordine
+		// decrescente restituiva 8♥ invece di 6♥ e la mossa veniva RIFIUTATA (null).
+		const result = service.validateRun('6♥️', '7♥️ * 5♥️');
+		expect(result).not.toBeNull();
+		// il 6♥ naturale entra nel gioco; la matta liberata resta in campo (non torna in mano).
+		expect(result!.map((c) => c.toString())).toContain('6♥️');
+		expect(result!.some((c) => c.toString().startsWith('*'))).toBe(true);
+	});
 });

@@ -93,9 +93,12 @@ export function cardToString(value: CardValue, suit: Suit = null, color: CardCol
 	return `${value}${SuitTag[suit]}`;
 }
 
+/** Rank delle figure (costante: no riallocazione a ogni chiamata; hot-path dei sort). */
+const FIGURE_RANKS: Record<string, number> = { J: 11, Q: 12, K: 13 };
+
 export function getCardRank(cardValue: CardValue, aceHigh = false): number {
-	const figures: any = { A: aceHigh ? 14 : 1, J: 11, Q: 12, K: 13 };
-	return figures[cardValue] || +cardValue || 0;
+	if (cardValue === 'A') return aceHigh ? 14 : 1;
+	return FIGURE_RANKS[cardValue] || +cardValue || 0;
 }
 
 // NB: `getCardAbsPos` è stato spostato in rules.ts (usa aceMayBeHigh/getNaturalNear/

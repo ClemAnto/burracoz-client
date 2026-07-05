@@ -8,7 +8,7 @@ import {
 	STARTER_DECK,
 	SuitTag,
 } from './cards';
-import { extractFrom, first, last } from '../utils/arrays';
+import { extractFrom } from '../utils/arrays';
 
 type MeldInput = DeckItems | DeckItem[] | string;
 
@@ -245,7 +245,7 @@ export function isWild(card: DeckItem) {
 	return card && (card.value == '2' || card.value == '*');
 }
 
-export function aceMayBeHigh(cards: DeckItems) {
+export function aceMayBeHigh(cards: readonly DeckItem[]) {
 	const thereIsK = cards.some((c) => c.value == 'K');
 	if (thereIsK) return true;
 
@@ -274,7 +274,12 @@ export function getIncastroTag(cards: DeckItems): { tag: string; index: number }
 	if (wildIndex < 1 || wildIndex > cards.length - 2) return { tag: null, index: -1 };
 
 	const { card, offset } = getNaturalNear(cards, wildIndex);
-	const tagIndex = STARTER_DECK.indexOf(card.tag) - offset;
+	// STARTER_DECK è ascendente per rank dentro ogni seme, quindi ±1 sull'indice = ±1 di
+	// rank. Il tag rappresentato dalla matta si trova spostandosi dal naturale vicino di un
+	// rank verso la matta: la direzione dipende dal VERSO dell'array (i giochi a terra sono
+	// memorizzati DECRESCENTI, l'input di gioco CRESCENTE), come in `getCardAbsPos`. Senza il
+	// fattore `rankDirection` la sostituzione falliva sulle scale memorizzate decrescenti.
+	const tagIndex = STARTER_DECK.indexOf(card.tag) - rankDirection(cards) * offset;
 
 	return {
 		tag: STARTER_DECK[tagIndex] ?? null,
@@ -282,7 +287,7 @@ export function getIncastroTag(cards: DeckItems): { tag: string; index: number }
 	};
 }
 
-export function isNatural2(cards: DeckItems, index: number): boolean {
+export function isNatural2(cards: readonly DeckItem[], index: number): boolean {
 	const target = cards[index];
 	if (+target.value != 2) return false;
 
@@ -320,9 +325,11 @@ export function getNaturalNear(cards: DeckItem[], index: number) {
  */
 export function getCardAbsPos(cardIndex: number, cards: DeckItem[]): number {
 	let cardValue: CardValue = cards[cardIndex].value;
-	if (+cardValue == 2 && !isNatural2(DeckItems.fromArray(cards), cardIndex)) cardValue = '*';
+	// `cards` è già un array: `isNatural2`/`aceMayBeHigh` accettano `readonly DeckItem[]`,
+	// niente più copie con `DeckItems.fromArray` a ogni carta (era O(n²) in validazione).
+	if (+cardValue == 2 && !isNatural2(cards, cardIndex)) cardValue = '*';
 
-	let pos = getCardRank(cardValue, cardValue == 'A' && aceMayBeHigh(DeckItems.fromArray(cards)));
+	let pos = getCardRank(cardValue, cardValue == 'A' && aceMayBeHigh(cards));
 	if (!pos) {
 		// Matta: la posizione si deduce dal naturale vicino. Il verso dell'array
 		// (rank crescente o decrescente con l'indice) determina il segno: i giochi
