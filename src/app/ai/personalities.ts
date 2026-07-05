@@ -14,6 +14,7 @@ const BALANCED_PROFILE: AiProfile = {
 	wildUsage: 0.5,
 	discardCaution: 0.5,
 	cooperation: 0.5,
+	opportunism: 0.5,
 	patience: 0.5,
 	attention: 0.5,
 	learning: 0.5,
@@ -21,6 +22,7 @@ const BALANCED_PROFILE: AiProfile = {
 	talkativeness: 0.5,
 	meanness: 0.3,
 	selfIrony: 0.5,
+	luckAttribution: 0.5,
 };
 
 /**

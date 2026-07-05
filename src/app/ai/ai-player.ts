@@ -34,6 +34,10 @@ export interface AiProfile {
 	 *  i RUOLI per il pozzetto (se il compagno accumula si svuota lui per prenderlo, e
 	 *  viceversa). Legge il conteggio carte del compagno (`partnerHandCount`). */
 	cooperation: number;
+	/** 0 = compassionevole (non infierisce) · 1 = opportunista: sfrutta la debolezza
+	 *  altrui — es. affretta la chiusura quando gli avversari sono ancora pieni di carte,
+	 *  per infliggere più penalità. Legge `opponentHandCounts`. */
+	opportunism: number;
 	/** 0 = impulsivo, decide sul momento · 1 = pianifica a lungo termine. */
 	patience: number;
 	/** Attenzione: quanto l'IA percepisce e VALUTA lo stato. 0 = distratta, ignora
@@ -60,6 +64,11 @@ export interface AiProfile {
 	meanness: number;
 	/** 0 = mai su di sé · 1 = ironizza spesso sulle proprie giocate. */
 	selfIrony: number;
+	/** A cosa attribuisce gli esiti: 0 = "la bravura è tutto" (anche gli eventi fortunati
+	 *  li legge come merito/abilità) · 1 = "è tutta fortuna" (anche le belle giocate le
+	 *  legge come culo). Tratto di sola VOCE: rilegge la qualità dell'evento tra
+	 *  'good' e 'lucky' nei commenti, non tocca le decisioni di gioco. */
+	luckAttribution: number;
 }
 
 /** Scelta della fase di pesca. */
@@ -83,7 +92,10 @@ export type Relation = 'self' | 'partner' | 'opponent';
 export type PhraseKey =
 	| `${Relation}:${PlayQuality}`
 	| 'banter:rival' // es. "con te perdo sempre" / "vediamo se stavolta mi batti"
-	| 'banter:greeting';
+	| 'banter:greeting'
+	| 'encourage' // incoraggiamento a chi è in difficoltà (compagno o avversario)
+	| 'standing:behind' // siamo sotto in partita → battuta di rimonta
+	| 'standing:ahead'; // siamo avanti in partita → sfottò a chi sta perdendo
 
 /**
  * Repertorio di battute di una personalità: per ogni situazione una lista di

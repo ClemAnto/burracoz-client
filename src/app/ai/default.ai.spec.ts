@@ -1,7 +1,7 @@
 import { DeckItem } from '../services/cards';
 import { PlayerSide } from '../services/round';
 import { Rules } from '../services/rules';
-import { AiProfile, GameView } from './ai-player';
+import { AiProfile, GameView, PlayQuality } from './ai-player';
 import { DefaultAi } from './default.ai';
 
 // ============================================================
@@ -27,6 +27,7 @@ function profile(overrides: Partial<AiProfile> = {}): AiProfile {
 		wildUsage: 0.5,
 		discardCaution: 0.5,
 		cooperation: 0,
+		opportunism: 0.5,
 		patience: 0.5,
 		attention: 1,
 		learning: 0,
@@ -34,6 +35,7 @@ function profile(overrides: Partial<AiProfile> = {}): AiProfile {
 		talkativeness: 0,
 		meanness: 0,
 		selfIrony: 0,
+		luckAttribution: 0.5,
 		...overrides,
 	};
 }
@@ -56,6 +58,9 @@ class TestAi extends DefaultAi {
 	}
 	wants(value: string) {
 		return this.opponentWantsValue(value);
+	}
+	frame(quality: PlayQuality) {
+		return this.frameByAttribution(quality);
 	}
 }
 
@@ -209,6 +214,39 @@ describe('DefaultAi — stance di chiusura', () => {
 		const ai = makeAi({ experience: 0.8, cooperation: 0.8 });
 		expect(ai.stance(threatView(3, { partnerHandCount: 9 }))).toBe('rush');
 	});
+
+	it('opportunista: chiude per punire gli avversari ancora carichi', () => {
+		const ai = makeAi({ experience: 0.8, opportunism: 0.8 });
+		const v = view({
+			potTakenByTeam: true,
+			teamHasBurraco: true,
+			matchScore: { ours: 200, opponents: 200 }, // lontani dal target → di norma accumula
+			opponentHandCounts: [9, 9], // carichi
+		});
+		expect(ai.stance(v)).toBe('rush');
+	});
+
+	it('compassionevole: non chiude solo per infierire su avversari carichi', () => {
+		const ai = makeAi({ experience: 0.8, opportunism: 0.2 });
+		const v = view({
+			potTakenByTeam: true,
+			teamHasBurraco: true,
+			matchScore: { ours: 200, opponents: 200 },
+			opponentHandCounts: [9, 9],
+		});
+		expect(ai.stance(v)).toBe('accumulate');
+	});
+
+	it('opportunista ma avversari già corti: non forza la chiusura', () => {
+		const ai = makeAi({ experience: 0.8, opportunism: 0.8 });
+		const v = view({
+			potTakenByTeam: true,
+			teamHasBurraco: true,
+			matchScore: { ours: 200, opponents: 200 },
+			opponentHandCounts: [3, 3], // non carichi
+		});
+		expect(ai.stance(v)).toBe('accumulate');
+	});
 });
 
 describe('DefaultAi — difesa dalla chiusura avversaria', () => {
@@ -278,6 +316,97 @@ describe('DefaultAi — modello del contenuto delle mani avversarie', () => {
 		// Senza il segnale scarterebbe il K (più pesante); sapendo che lo cercano, tiene il K.
 		const decision = ai.decideDiscard(view({ hand: cards('K♣️ 3♥️') }));
 		expect(decision.value.tag).toBe('3♥️');
+	});
+});
+
+describe('DefaultAi — attribuzione fortuna/bravura', () => {
+	it('"la bravura è tutto" (basso): legge la fortuna come merito (lucky→good)', () => {
+		const ai = makeAi({ luckAttribution: 0.2 });
+		expect(ai.frame('lucky')).toBe('good');
+		expect(ai.frame('good')).toBe('good');
+	});
+
+	it('"è tutta fortuna" (alto): legge le belle giocate come culo (good→lucky)', () => {
+		const ai = makeAi({ luckAttribution: 0.8 });
+		expect(ai.frame('good')).toBe('lucky');
+		expect(ai.frame('lucky')).toBe('lucky');
+	});
+
+	it('via di mezzo: non rilegge nulla', () => {
+		const ai = makeAi({ luckAttribution: 0.5 });
+		expect(ai.frame('good')).toBe('good');
+		expect(ai.frame('lucky')).toBe('lucky');
+	});
+});
+
+describe('DefaultAi — voce guidata dall’opportunismo', () => {
+	const progressed = { myMelds: [cards('7♥️ 7♠️ 7♦️')] }; // giochi in tavola
+	const eastDiscard = { kind: 'discard' as const, actor: PlayerSide.East };
+	const northDiscard = { kind: 'discard' as const, actor: PlayerSide.North };
+	const selfBurraco = { kind: 'burraco' as const, actor: PlayerSide.South };
+
+	it('compassionevole: incoraggia l’avversario in difficoltà', () => {
+		const ai = makeAi({ opportunism: 0.2, talkativeness: 1 });
+		expect(ai.comment(eastDiscard, view({ ...progressed, opponentHandCounts: [10, 7] }))).toBe(
+			'Dai, ci sta! 🙂',
+		);
+	});
+
+	it('compassionevole: incoraggia anche il compagno in difficoltà', () => {
+		const ai = makeAi({ opportunism: 0.2, talkativeness: 1 });
+		expect(ai.comment(northDiscard, view({ ...progressed, partnerHandCount: 10 }))).toBe(
+			'Dai, ci sta! 🙂',
+		);
+	});
+
+	it('opportunista: sfotte l’avversario in difficoltà', () => {
+		const ai = makeAi({ opportunism: 0.8, talkativeness: 1 });
+		expect(ai.comment(eastDiscard, view({ ...progressed, opponentHandCounts: [10, 7] }))).toBe(
+			'Eh eh. 😏',
+		);
+	});
+
+	it('a inizio mano (nessun gioco a terra) non scatta la difficoltà', () => {
+		const ai = makeAi({ opportunism: 0.2, talkativeness: 1 });
+		expect(ai.comment(eastDiscard, view({ opponentHandCounts: [11, 11] }))).toBeNull();
+	});
+
+	it('opportunista: si vanta di una buona giocata anche con poca autoironia', () => {
+		const ai = makeAi({ opportunism: 0.8, selfIrony: 0, talkativeness: 1 }, () => 0.4);
+		expect(ai.comment(selfBurraco, view())).toBe('Come si fa. 😎');
+	});
+
+	it('non-opportunista: resta umile su una buona giocata (poca autoironia)', () => {
+		const ai = makeAi({ opportunism: 0.2, selfIrony: 0, talkativeness: 1 }, () => 0.4);
+		expect(ai.comment(selfBurraco, view())).toBeNull();
+	});
+});
+
+describe('DefaultAi — lettura della classifica partita', () => {
+	const handStart = { kind: 'hand_start' as const, actor: PlayerSide.South };
+
+	it('sotto in partita: battuta di rimonta a inizio mano', () => {
+		const ai = makeAi({ talkativeness: 1 });
+		const v = view({ matchScore: { ours: 100, opponents: 500 } });
+		expect(ai.comment(handStart, v)).toBe('Adesso comincia la rimonta! 💪');
+	});
+
+	it('avanti in partita e opportunista: sfotte chi perde', () => {
+		const ai = makeAi({ talkativeness: 1, opportunism: 0.8 });
+		const v = view({ matchScore: { ours: 500, opponents: 100 } });
+		expect(ai.comment(handStart, v)).toBe('Tanto state per perdere. 😏');
+	});
+
+	it('avanti in partita ma compassionevole: non infierisce', () => {
+		const ai = makeAi({ talkativeness: 1, opportunism: 0.2, meanness: 0 }, () => 0.5);
+		const v = view({ matchScore: { ours: 500, opponents: 100 } });
+		expect(ai.comment(handStart, v)).toBeNull();
+	});
+
+	it('partita in equilibrio: nessuna battuta di classifica', () => {
+		const ai = makeAi({ talkativeness: 1 });
+		const v = view({ matchScore: { ours: 300, opponents: 300 } });
+		expect(ai.comment(handStart, v)).toBeNull();
 	});
 });
 

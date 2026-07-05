@@ -9,6 +9,7 @@ const SERGIO_PROFILE: AiProfile = {
 	wildUsage: 0.7,
 	discardCaution: 0.3,
 	cooperation: 0.5,
+	opportunism: 0.8, // opportunista: infierisce sugli avversari carichi
 	patience: 0.3,
 	attention: 0.5,
 	learning: 0.5,
@@ -16,6 +17,7 @@ const SERGIO_PROFILE: AiProfile = {
 	talkativeness: 0.85,
 	meanness: 0.8,
 	selfIrony: 0.3,
+	luckAttribution: 0.2, // "la bravura è tutto": è merito suo, non fortuna
 };
 
 const SERGIO_PHRASES: PhraseBank = {
@@ -28,6 +30,12 @@ const SERGIO_PHRASES: PhraseBank = {
 	'self:bad': ['Vabbè, ci sta. 😤'],
 	'banter:greeting': ['Si gioca! Preparatevi a perdere. 😈'],
 	'banter:rival': ['Di nuovo tu? Stavolta ti asfalto. 😤', 'Pronto a perdere anche oggi? 😏'],
+	'standing:behind': ['E ora vi asfalto nella rimonta. 😤', 'Mi state solo scaldando. 😏'],
+	'standing:ahead': [
+		'Non ti ci mettere il pensiero, tanto perdete. 😏',
+		'Finalmente un punticino, eh? 🙄',
+		'Rilassatevi pure, vinciamo noi. 😎',
+	],
 };
 
 export class SergioAi extends DefaultAi {

@@ -56,6 +56,21 @@ const OPPONENT_CLOSE_IMMINENT = 1;
 /** Scarti minimi osservati da un avversario per inferire cosa NON scarta (→ raccoglie). */
 const WANT_MIN_DISCARDS = 4;
 
+/** Media carte in mano agli avversari sopra cui sono "carichi": chiuderli infligge più penalità. */
+const OPPONENT_LOADED = 8;
+
+/** Opportunismo minimo per affrettare la chiusura e punire gli avversari carichi. */
+const OPPORTUNISM_MIN = 0.6;
+
+/** Opportunismo ≤ questo = compassionevole: incoraggia chi è in difficoltà invece di sfottere. */
+const COMPASSION_MAX = 0.4;
+
+/** Carte in mano (a giochi già in tavola) sopra cui un giocatore è "in difficoltà". */
+const DIFFICULTY_HAND = 9;
+
+/** Distacco in punti PARTITA oltre cui si legge la classifica (rimonta / sfottò a chi perde). */
+const STANDING_GAP = 200;
+
 /** Opzioni di costruzione di una IA. */
 export interface DefaultAiOptions {
 	id: string;
@@ -275,7 +290,21 @@ export class DefaultAi implements AiPlayer {
 			base = this.profile.pointGreed >= 0.6 ? 'accumulate' : 'rush';
 		}
 
+		// Opportunista: se posso già chiudere e gli avversari sono ancora carichi, chiudo
+		// per infliggere più penalità. Il compassionevole non ci marcia. (La cooperazione
+		// può comunque frenare, sotto, se il compagno è pieno.)
+		if (canClose && this.profile.opportunism >= OPPORTUNISM_MIN && this.opponentsLoaded(view)) {
+			base = 'rush';
+		}
+
 		return this.cooperativeStance(view, base);
+	}
+
+	/** Gli avversari sono ancora carichi di carte (media ≥ `OPPONENT_LOADED`)? */
+	protected opponentsLoaded(view: GameView): boolean {
+		const counts = view.opponentHandCounts;
+		if (!counts.length) return false;
+		return counts.reduce((sum, n) => sum + n, 0) / counts.length >= OPPONENT_LOADED;
 	}
 
 	/**
@@ -717,29 +746,101 @@ export class DefaultAi implements AiPlayer {
 	// ============================================================
 
 	comment(event: TableEvent, view: GameView): string | null {
-		if (event.kind === 'game_start' || event.kind === 'hand_start') return this.banter(view);
+		// Apertura partita: saluto / battuta col rivale storico.
+		if (event.kind === 'game_start') return this.openingBanter(view);
+		// A ogni nuova mano e a fine partita si legge l'andamento dell'INTERA PARTITA.
+		if (event.kind === 'hand_start' || event.kind === 'game_end')
+			return this.standingBanter(view);
 
 		const relation = this.relationOf(event.actor, view);
+
+		// Momento di difficoltà di un altro (mano carica a giochi già in tavola): segue
+		// `opportunism`. Il compassionevole incoraggia (compagno E avversario);
+		// l'opportunista sfotte l'avversario in affanno.
+		if (relation !== 'self' && this.actorInDifficulty(event, view)) {
+			if (this.rng() > this.profile.talkativeness) return null;
+			if (this.profile.opportunism <= COMPASSION_MAX) return this.pick('encourage');
+			if (relation === 'opponent' && this.profile.opportunism >= OPPORTUNISM_MIN) {
+				return this.pick('opponent:bad');
+			}
+			return null;
+		}
+
 		const quality = event.quality ?? assessQuality(event);
 		if (quality === 'neutral') return null; // non commenta il banale
 
 		// Loquacità: gate sulla frequenza dei commenti.
 		if (this.rng() > this.profile.talkativeness) return null;
-		// Autoironia: commenta sé stesso solo se ci scherza su.
-		if (relation === 'self' && this.rng() > this.profile.selfIrony) return null;
-		// Cattiveria: lo sfottò all'avversario in difficoltà solo se provocatore.
-		if (relation === 'opponent' && quality === 'bad' && this.rng() > this.profile.meanness) {
-			return null;
+		// Autoironia: commenta sé stesso solo se ci scherza su... ma l'opportunista si
+		// VANTA comunque delle proprie buone giocate (sottolinea la superiorità).
+		if (relation === 'self') {
+			const boast = quality === 'good' && this.profile.opportunism >= OPPORTUNISM_MIN;
+			if (!boast && this.rng() > this.profile.selfIrony) return null;
+		}
+		// Sfottò all'avversario in difficoltà: da provocatore (meanness) o da opportunista.
+		if (relation === 'opponent' && quality === 'bad') {
+			if (this.rng() > Math.max(this.profile.meanness, this.profile.opportunism)) return null;
 		}
 
-		return this.pick(`${relation}:${quality}` as PhraseKey);
+		// Attribuzione fortuna/bravura: rilegge good↔lucky (fallback alla qualità reale
+		// se manca la battuta riletta).
+		const framed = this.frameByAttribution(quality);
+		return (
+			this.pick(`${relation}:${framed}` as PhraseKey) ??
+			this.pick(`${relation}:${quality}` as PhraseKey)
+		);
+	}
+
+	/**
+	 * Un compagno/avversario che ha appena SCARTATO è "in difficoltà" se resta con la
+	 * mano carica (≥`DIFFICULTY_HAND`) a giochi già in tavola — non a inizio mano, quando
+	 * tutti hanno molte carte. Conteggi PUBBLICI, dalla vista del commentatore.
+	 */
+	protected actorInDifficulty(event: TableEvent, view: GameView): boolean {
+		if (event.kind !== 'discard') return false;
+		if (!view.myMelds.length && !view.theirMelds.length) return false;
+		const count =
+			event.actor === view.partner
+				? view.partnerHandCount
+				: (view.opponentHandCounts[view.opponents.indexOf(event.actor)] ?? 0);
+		return count >= DIFFICULTY_HAND;
+	}
+
+	/**
+	 * Rilegge la qualità di un evento secondo `luckAttribution`: chi crede che "la
+	 * bravura è tutto" (basso) vede anche gli eventi fortunati come merito ('lucky'→
+	 * 'good'); chi pensa che "è tutta fortuna" (alto) vede anche le belle giocate come
+	 * culo ('good'→'lucky'). Le vie di mezzo non rileggono nulla.
+	 */
+	protected frameByAttribution(quality: PlayQuality): PlayQuality {
+		if (quality === 'good' && this.profile.luckAttribution >= 0.6) return 'lucky';
+		if (quality === 'lucky' && this.profile.luckAttribution <= 0.4) return 'good';
+		return quality;
 	}
 
 	/** Battuta d'apertura, eventualmente basata sul record testa-a-testa. */
-	protected banter(view: GameView): string | null {
+	protected openingBanter(view: GameView): string | null {
 		if (this.rng() > this.profile.talkativeness) return null;
 		const hasRival = view.opponents.some((o) => (this.longTerm.headToHead[o]?.games ?? 0) >= 3);
 		return this.pick(hasRival ? 'banter:rival' : 'banter:greeting');
+	}
+
+	/**
+	 * Legge l'andamento dell'INTERA PARTITA (punteggio, non solo la mano): sotto di
+	 * ≥`STANDING_GAP` → battuta di rimonta; avanti di altrettanto → sfottò a chi perde,
+	 * ma solo se opportunista/provocatore. Partita in equilibrio → tace.
+	 */
+	protected standingBanter(view: GameView): string | null {
+		if (this.rng() > this.profile.talkativeness) return null;
+		const gap = view.matchScore.ours - view.matchScore.opponents;
+		if (gap <= -STANDING_GAP) return this.pick('standing:behind');
+		if (
+			gap >= STANDING_GAP &&
+			this.rng() < Math.max(this.profile.opportunism, this.profile.meanness)
+		) {
+			return this.pick('standing:ahead');
+		}
+		return null;
 	}
 
 	protected relationOf(actor: RoundPlayer, view: GameView): Relation {
@@ -953,7 +1054,11 @@ const DEFAULT_PHRASES: PhraseBank = {
 	'opponent:lucky': ['Che fortuna sfacciata! 😤'],
 	'opponent:bad': ['Eh eh. 😏'],
 	'self:good': ['Come si fa. 😎'],
+	'self:lucky': ['Che fortuna che ho! 🍀'],
 	'self:bad': ['Ops. 😅'],
+	encourage: ['Dai, ci sta! 🙂', 'Su, niente drammi. 🤗'],
+	'standing:behind': ['Adesso comincia la rimonta! 💪', 'Non è ancora finita. 😤'],
+	'standing:ahead': ['Tanto state per perdere. 😏', 'Finalmente avete fatto qualche punto. 🙄'],
 	'banter:greeting': ['Buona partita a tutti. 🙂'],
 	'banter:rival': ['Vediamo come va oggi. 👀'],
 };
