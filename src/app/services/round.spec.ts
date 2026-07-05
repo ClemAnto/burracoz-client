@@ -275,14 +275,17 @@ describe('Round – pozzetto e chiusura', () => {
 		expect(round.pots()[potIndex].length).toBeGreaterThan(0); // il pozzetto è ancora lì
 	});
 
-	it('non si chiude senza burraco, anche con pozzetto preso', () => {
+	it('non si svuota la mano senza chiudere (pozzetto preso, niente burraco)', () => {
 		round.startHand();
 		const player = round.currentPlayer()!;
 		round.drawFromStock();
 		round.playerHasTakenPot.update((m) => ({ ...m, [player]: true }));
 		round.hands.update((h) => ({ ...h, [player]: [new DeckItem('7♦️')] }));
 
-		expect(round.discard(round.hands()[player][0])).toBeTrue();
+		// Dopo il pozzetto ci si svuota solo chiudendo: senza burraco lo scarto
+		// dell'ultima carta è illegale.
+		expect(round.discard(round.hands()[player][0])).toBeFalse();
+		expect(round.hands()[player].length).toBe(1);
 		expect(round.phase()).toBe(RoundPhase.InProgress);
 	});
 
@@ -318,5 +321,36 @@ describe('Round – pozzetto e chiusura', () => {
 		const score = round.score()!;
 		expect(score.ours.breakdown.closureBonus).toBe(0); // nessun +100
 		expect(score.opponents.breakdown.closureBonus).toBe(0);
+	});
+
+	it('fine tallone senza prese: nessuna penalità pozzetto (regolamento §7)', () => {
+		round.startHand();
+		const player = round.currentPlayer()!;
+		round.drawFromStock();
+		round.drawPile.set([]); // nessuno ha ancora preso il pozzetto
+		expect(round.discard(round.hands()[player].at(-1)!)).toBeTrue();
+
+		const score = round.score()!;
+		expect(score.ours.breakdown.potNotTakenPenalty).toBe(0);
+		expect(score.opponents.breakdown.potNotTakenPenalty).toBe(0);
+	});
+
+	it('Art. 7: la carta raccolta da un monte di 1 non è ri-scartabile subito', () => {
+		round.startHand();
+		const player = round.currentPlayer()!;
+		// Monte di UNA sola carta; mano senza altri K.
+		round.discardPile.set([new DeckItem('K♦️')]);
+		round.hands.update((h) => ({
+			...h,
+			[player]: [new DeckItem('3♥️'), new DeckItem('5♠️')],
+		}));
+
+		expect(round.takeDiscardPile()).toBeTrue();
+		const collected = round.hands()[player].find((c) => c.tag === 'K♦️')!;
+		expect(round.discard(collected)).toBeFalse(); // riscarto immediato vietato
+
+		// Con un duplicato dello stesso valore in mano, invece, è consentito.
+		round.hands.update((h) => ({ ...h, [player]: [...h[player], new DeckItem('K♠️')] }));
+		expect(round.discard(collected)).toBeTrue();
 	});
 });

@@ -151,6 +151,12 @@ export class Round {
 	endedByStockExhaustion = signal<boolean>(false);
 	lastError = signal<string | null>(null);
 	playerHasTakenPot = signal<Record<PlayerSide, boolean>>(createEmptyPotFlags());
+	/**
+	 * Art. 7: valore dell'UNICA carta appena raccolta da un monte scarti di una sola carta.
+	 * Quella carta non è ri-scartabile subito salvo averne in mano un'altra dello stesso
+	 * valore. Transitorio per turno: settato in `takeDiscardPile`, azzerato a `nextTurn`.
+	 */
+	private collectedSingleValue: string | null = null;
 	teamHasBurraco = computed(() => {
 		const melds = this.melds();
 		const hasBurraco = (teamMelds: DeckItem[][]) => teamMelds.some((m) => m.length >= 7);
@@ -175,6 +181,7 @@ export class Round {
 	});
 
 	async prepareDeck() {
+		this.collectedSingleValue = null;
 		if (this.initialized()) {
 			const h = this.hands();
 			const draws = this.shuffleDeck([
@@ -375,6 +382,11 @@ export class Round {
 		const pile = this.discardPile();
 		if (!pile.length) return this.rejectAction('Monte scarti vuoto.');
 
+		// Art. 7: un monte di UNA sola carta, una volta raccolto, non può essere
+		// ri-scartato subito (salvo un duplicato in mano). Memorizza il valore; il
+		// controllo è in `discard`.
+		this.collectedSingleValue = pile.length === 1 ? pile[0].value : null;
+
 		// La raccolta SOSTITUISCE la pesca (Art. 7): tutto il monte scarti entra
 		// in mano. Le carte sono già scoperte sul tavolo (faceDown=false), la
 		// prospettiva del Deck gestisce la visibilità per mano.
@@ -465,16 +477,38 @@ export class Round {
 
 		const [cardItem] = cardItems;
 
+		const team = TEAM_BY_PLAYER[player];
+		const wouldEmptyHand = this.hands()[player].length === 1;
+		const takenPot = this.teamHasTakenPot(team);
+		const hasBurraco = this.teamHasBurraco()[team];
+
 		// Art. 14: non si può chiudere scartando una matta. Se questo scarto
 		// svuoterebbe la mano E la squadra può chiudere (pozzetto preso + burraco),
 		// la matta come ultimo scarto è illegale: l'azione va rifiutata.
-		const team = TEAM_BY_PLAYER[player];
-		const wouldClose =
-			this.hands()[player].length === 1 &&
-			this.teamHasTakenPot(team) &&
-			this.teamHasBurraco()[team];
-		if (wouldClose && isWild(cardItem)) {
+		if (wouldEmptyHand && takenPot && hasBurraco && isWild(cardItem)) {
 			return this.rejectAction('Non puoi chiudere scartando una matta (Art. 14).');
+		}
+
+		// Dopo aver preso il pozzetto ci si svuota la mano SOLO chiudendo: senza un
+		// burraco lo scarto dell'ultima carta è illegale (mano vuota senza chiusura).
+		if (wouldEmptyHand && takenPot && !hasBurraco) {
+			return this.rejectAction(
+				'Non puoi restare senza carte senza chiudere: ti manca un burraco.',
+			);
+		}
+
+		// Art. 7: l'unica carta appena raccolta da un monte di 1 carta non è ri-scartabile
+		// subito, salvo averne in mano un'altra dello stesso valore (il duplicato rende lo
+		// scarto una scelta reale e non un no-op che ripristina il monte).
+		if (this.collectedSingleValue && cardItem.value === this.collectedSingleValue) {
+			const sameValueInHand = this.hands()[player].filter(
+				(c) => c.value === cardItem.value,
+			).length;
+			if (sameValueInHand < 2) {
+				return this.rejectAction(
+					'Non puoi riscartare subito la carta appena raccolta dal monte (Art. 7).',
+				);
+			}
 		}
 
 		this.removeCardsFromHand(player, cardItems);
@@ -531,6 +565,8 @@ export class Round {
 	}
 
 	private nextTurn(): void {
+		// La restrizione Art. 7 vale solo per il turno in cui si è raccolto: azzera.
+		this.collectedSingleValue = null;
 		// Fine tallone: se il prossimo giocatore non avrebbe da pescare, la mano finisce
 		// (senza +100). Il monte scarti si ristabilizza sempre a ≥1 carta, quindi il
 		// tallone esaurito è l'unica condizione terminale deterministica.
@@ -595,6 +631,10 @@ export class Round {
 		const melds = this.melds();
 		const hands = this.hands();
 		const potTaken = this.playerHasTakenPot();
+		// La penalità pozzetto non si applica se NESSUNA coppia ha preso il pozzetto
+		// (regolamento §7): capita nel fine tallone precoce, quando la mano finisce
+		// prima che qualcuno vada a pozzetto.
+		const anyPotTaken = Object.values(potTaken).some(Boolean);
 
 		const teamScore = (team: RoundTeam): RoundTeamScore => {
 			let openMeldPoints = 0;
@@ -612,7 +652,7 @@ export class Round {
 			const players = playersOfTeam(team);
 
 			const remainingHandPenalty = players.reduce((s, p) => s + sumCardPoints(hands[p]), 0);
-			const potNotTakenPenalty = players.some((p) => potTaken[p]) ? 0 : 100;
+			const potNotTakenPenalty = anyPotTaken && !players.some((p) => potTaken[p]) ? 100 : 0;
 
 			const breakdown: RoundScoreBreakdown = {
 				openMeldPoints,
