@@ -1,0 +1,14 @@
+<div [class]="wrapperClass()">
+	<div
+		class="bubble relative rounded-2xl bg-white px-3 py-1.5 text-sm leading-snug text-gray-900 shadow-lg"
+	>
+		@if (label()) {
+			<span class="mb-0.5 block text-[10px] font-bold tracking-wide text-gray-400">
+				{{ label() }}
+			</span>
+		}
+		{{ text() }}
+		<!-- Coda: quadratino dello stesso colore ruotato di 45°, si fonde col fumetto. -->
+		<span class="absolute h-2.5 w-2.5 rotate-45 bg-white" [class]="tailClass()"></span>
+	</div>
+</div>

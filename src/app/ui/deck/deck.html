@@ -60,12 +60,7 @@
 							: ''
 					"
 					[attr.tween-id]="animate() ? item.uid : null"
-					[attr.tween-data]="
-						{
-							transform: 'rotateY(' + (fd ? 180 : 0) + 'deg)',
-							rotate: cardRotate + 'deg',
-						} | json
-					"
+					[attr.tween-data]="tweenData(fd, cardRotate)"
 					[faceDown]="fd"
 					[item]="item"
 				/>

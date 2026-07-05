@@ -1,4 +1,4 @@
-import { Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { RoundScore, RoundTeam } from '../../services/round';
 
@@ -11,6 +11,7 @@ import { RoundScore, RoundTeam } from '../../services/round';
 	selector: 'ui-hand-result',
 	imports: [NzButtonModule],
 	templateUrl: './hand-result.html',
+	changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class HandResult {
 	/** true = partita finita ("NUOVA PARTITA"); false = solo mano chiusa ("NUOVA MANO"). */

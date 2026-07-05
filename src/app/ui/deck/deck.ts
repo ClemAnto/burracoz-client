@@ -1,4 +1,5 @@
 import {
+	ChangeDetectionStrategy,
 	Component,
 	computed,
 	DestroyRef,
@@ -20,6 +21,7 @@ const CARD_SIZE = { W: 40, H: 56 };
 	imports: [CommonModule, Card],
 	templateUrl: './deck.html',
 	styleUrls: ['./deck.scss'],
+	changeDetection: ChangeDetectionStrategy.OnPush,
 	host: {
 		'[style.--box-h.px]': 'CARD_SIZE.H',
 		'[style.--box-w.px]': 'CARD_SIZE.W',
@@ -97,6 +99,15 @@ export class Deck {
 	 */
 	renderFaceDown(item: DeckItem): boolean {
 		return this.faceDown() ?? item.faceDown;
+	}
+
+	/**
+	 * `tween-data` per una carta: SOLO proprietà compositabili (transform/rotate) che il
+	 * Tweener sa animare. La costruiamo qui come stringa invece di un oggetto letterale +
+	 * `| json` nel template, che allocava una nuova reference a ogni CD.
+	 */
+	tweenData(faceDown: boolean, rotateDeg: number): string {
+		return `{"transform":"rotateY(${faceDown ? 180 : 0}deg)","rotate":"${rotateDeg}deg"}`;
 	}
 
 	/**

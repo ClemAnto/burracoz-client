@@ -1,4 +1,4 @@
-import { Component, computed, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { DeckItem } from '../../services/cards';
 import { SuitIcon } from '../suit-icon/suit-icon';
 
@@ -7,6 +7,7 @@ import { SuitIcon } from '../suit-icon/suit-icon';
 	imports: [SuitIcon],
 	templateUrl: './card.html',
 	styleUrl: './card.scss',
+	changeDetection: ChangeDetectionStrategy.OnPush,
 	host: {
 		'[style.--rot-y.deg]': 'faceDown() ? 180 : 0',
 		'[attr.data-card]': 'item()?.tag',

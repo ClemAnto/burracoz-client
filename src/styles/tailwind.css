@@ -8,9 +8,17 @@
    Preferite a lunghe condizioni di classi inline nel template: nel markup basta
    la classe base + un toggle booleano (es. [class.seat--turn]). */
 
-/* Posto giocatore: contorno neutro; evidenziato in verde quando è il suo turno. */
+/* Posto giocatore: contorno neutro; evidenziato in verde quando è il suo turno.
+   Transizione su proprietà ESPLICITE (mai `all`): anima solo l'evidenziazione, non
+   toccherà mai transform/translate riservati al Tweener anche se un domani il posto
+   ne ricevesse uno. */
 .seat {
-	@apply rounded-lg outline outline-white/15 transition-all duration-300;
+	@apply rounded-lg outline outline-white/15;
+	transition:
+		outline-color 300ms,
+		outline-width 300ms,
+		background-color 300ms,
+		box-shadow 300ms;
 }
 .seat--turn {
 	@apply bg-green-400/10 outline-2 outline-green-400 shadow-[0_0_16px_2px_rgba(74,222,128,0.55)];
@@ -24,9 +32,13 @@
 	@apply bg-green-500 text-white;
 }
 
-/* Pile centrali (tallone/scarti): interattive ed evidenziate al proprio turno. */
+/* Pile centrali (tallone/scarti): interattive ed evidenziate al proprio turno.
+   Transizione su proprietà esplicite (mai `all`): solo contorno e ombra/ring. */
 .pile {
-	@apply cursor-default outline outline-white/20 transition-all;
+	@apply cursor-default outline outline-white/20;
+	transition:
+		outline-color 150ms,
+		box-shadow 150ms;
 }
 .pile--pick {
 	@apply animate-pulse cursor-pointer outline-green-400 ring-2 ring-green-400 hover:ring-4;

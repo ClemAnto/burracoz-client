@@ -1,14 +1,17 @@
 import { NgClass, UpperCasePipe } from '@angular/common';
 import {
 	AfterViewInit,
+	ChangeDetectionStrategy,
 	Component,
 	computed,
 	effect,
 	ElementRef,
 	inject,
+	OnDestroy,
 	signal,
 	ViewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzDrawerModule } from 'ng-zorro-antd/drawer';
 import { NzIconModule } from 'ng-zorro-antd/icon';
@@ -42,6 +45,7 @@ import {
 } from '../../services/move-notation';
 import { Deck } from '../deck/deck';
 import { HandResult } from '../hand-result/hand-result';
+import { SpeechBubble } from '../speech-bubble/speech-bubble';
 import { Tweener } from '../tweener/tweener';
 
 /** Velocità delle mosse IA. 'manual' = un passo per ogni "AVANTI". */
@@ -56,16 +60,18 @@ export type AiSpeed = 'manual' | 'slow' | 'medium' | 'fast';
 		NzTagModule,
 		Deck,
 		HandResult,
+		SpeechBubble,
 		Tweener,
 		UpperCasePipe,
 		NgClass,
 	],
 	templateUrl: './board.html',
+	changeDetection: ChangeDetectionStrategy.OnPush,
 	host: {
 		class: 'flex flex-col flex-1 min-h-0 w-full relative overflow-hidden',
 	},
 })
-export class Board implements AfterViewInit {
+export class Board implements AfterViewInit, OnDestroy {
 	@ViewChild('tweener') tweener: Tweener;
 	@ViewChild('drawPile') drawPile: Deck;
 	@ViewChild('discardPile') discardPile: Deck;
@@ -119,8 +125,15 @@ export class Board implements AfterViewInit {
 		return this.aiEnabled()[player] ? this.seatAi[player] : null;
 	}
 
-	/** Ultima battuta pronunciata da un'IA (per il fumetto a schermo). */
-	aiSpeech = signal<{ player: PlayerSide; text: string } | null>(null);
+	/** Battuta corrente per ciascun posto (fumetto dal proprio lato). null = tace. */
+	aiSpeech = signal<Record<PlayerSide, string | null>>({
+		[PlayerSide.North]: null,
+		[PlayerSide.East]: null,
+		[PlayerSide.South]: null,
+		[PlayerSide.West]: null,
+	});
+	/** Timer di scomparsa per posto: una nuova battuta resetta solo il proprio. */
+	private speechTimers: Partial<Record<PlayerSide, ReturnType<typeof setTimeout>>> = {};
 
 	/** Log delle decisioni IA (per il debug). */
 	aiLog = signal<string[]>([]);
@@ -297,9 +310,15 @@ export class Board implements AfterViewInit {
 
 	roundPhase = this.game.roundPhase;
 
-	lastError = signal<string>(null);
+	/** Errore dell'ultima azione (mossa umana illegale): passa-attraverso da Game/Round. */
+	lastError = this.game.lastError;
 
 	private dealAbort: AbortController | null = null;
+
+	// Risorse da ripulire alla distruzione (evita listener/observer orfani).
+	private mediaQuery: MediaQueryList | null = null;
+	private readonly onMediaChange = (e: MediaQueryListEvent) => this.mobile.set(e.matches);
+	private resizeObserver: ResizeObserver | null = null;
 
 	/** True mentre un'azione animata (pesca/scarto) è in corso: blocca la rientranza da doppio click. */
 	private busy = false;
@@ -328,9 +347,9 @@ export class Board implements AfterViewInit {
 
 		// Adatta l'offset verticale dei giochi al viewport mobile.
 		if (typeof matchMedia === 'function') {
-			const mq = matchMedia('(max-width: 640px)');
-			this.mobile.set(mq.matches);
-			mq.addEventListener('change', (e) => this.mobile.set(e.matches));
+			this.mediaQuery = matchMedia('(max-width: 640px)');
+			this.mobile.set(this.mediaQuery.matches);
+			this.mediaQuery.addEventListener('change', this.onMediaChange);
 		}
 
 		// Loop dei turni: quando tocca a un posto IA, il conduttore esegue il turno.
@@ -343,10 +362,16 @@ export class Board implements AfterViewInit {
 			this.maybeRunAiTurn();
 		});
 
-		// Registra le mosse e le trasmette alle IA (memoria + voce).
-		this.game.gameplayEvents.subscribe((event) => this.onGameplayEvent(event));
+		// Registra le mosse e le trasmette alle IA (memoria + voce). `takeUntilDestroyed`
+		// perché Game è un singleton (providedIn:'root'): senza, le subscription
+		// sopravviverebbero alla Board (leak + doppio handling).
+		this.game.gameplayEvents
+			.pipe(takeUntilDestroyed())
+			.subscribe((event) => this.onGameplayEvent(event));
 		// Eventi di partita: banter, reset memoria, apprendimento, persistenza.
-		this.game.gameEvents.subscribe((event) => this.onGameEvent(event));
+		this.game.gameEvents
+			.pipe(takeUntilDestroyed())
+			.subscribe((event) => this.onGameEvent(event));
 	}
 
 	attachToMeld(meldIndex: number) {
@@ -478,10 +503,18 @@ export class Board implements AfterViewInit {
 		// Osserva l'altezza dell'area giochi per dimensionare l'offset dei giochi.
 		const meldEl = this.meldArea?.nativeElement;
 		if (meldEl && typeof ResizeObserver === 'function') {
-			const observer = new ResizeObserver(() => this.meldAreaHeight.set(meldEl.clientHeight));
-			observer.observe(meldEl);
+			this.resizeObserver = new ResizeObserver(() =>
+				this.meldAreaHeight.set(meldEl.clientHeight),
+			);
+			this.resizeObserver.observe(meldEl);
 			this.meldAreaHeight.set(meldEl.clientHeight);
 		}
+	}
+
+	ngOnDestroy(): void {
+		this.mediaQuery?.removeEventListener('change', this.onMediaChange);
+		this.resizeObserver?.disconnect();
+		for (const timer of Object.values(this.speechTimers)) clearTimeout(timer);
 	}
 
 	/**
@@ -654,6 +687,9 @@ export class Board implements AfterViewInit {
 	async resetGame() {
 		const gen = ++this.resetGen;
 		this.dealAbort?.abort();
+		// Sblocca un eventuale turno IA in pausa "manuale": alla ripresa `runAiTurn`
+		// rileva il cambio di generazione ed esce (altrimenti `busy` resterebbe true).
+		this.advanceStep();
 		this.animate.set(false);
 		this.tweener?.reset();
 		await sleep(0); // attende che Angular processi animate=false (e azzeri le leave animations) prima di cambiare i segnali delle carte
@@ -767,9 +803,18 @@ export class Board implements AfterViewInit {
 		if (speed !== 'manual' && this.stepResolver) this.advanceStep();
 	}
 
-	/** Turno interrotto (player aperto o reset). */
+	/** Turno interrotto (player aperto)? */
 	private aborted(): boolean {
 		return !!this.playback();
+	}
+
+	/**
+	 * Il turno IA avviato con generazione `gen` è ancora valido? Diventa STALE se nel
+	 * frattempo è arrivato un reset/apply-state (che incrementano `resetGen`) o si è aperto
+	 * il player: così un turno sospeso in pausa "manuale", una volta sbloccato, esce subito.
+	 */
+	private turnStale(gen: number): boolean {
+		return this.aborted() || gen !== this.resetGen;
 	}
 
 	/** Esegue il turno del bot corrente: pesca → giochi → scarto, col ritmo scelto. */
@@ -781,12 +826,13 @@ export class Board implements AfterViewInit {
 		if (!ai) return;
 		if (this.roundPhase() !== RoundPhase.InProgress) return;
 
+		const gen = this.resetGen; // se cambia (reset/apply-state), il turno è ormai stale
 		this.busy = true;
 		try {
 			// PESCA (saltata se, dopo un F5, il turno è già in fase gioca-e-scarta).
 			if (this.turnStep() === RoundTurnStep.DrawOrCollect) {
 				await this.waitStep();
-				if (this.aborted()) return;
+				if (this.turnStale(gen)) return;
 				const draw = ai.decideDraw(this.buildView(player));
 				this.logAi(player, draw.reason);
 				const wantsPile = draw.value === 'discard' && this.game.discardPile().length > 0;
@@ -808,7 +854,7 @@ export class Board implements AfterViewInit {
 				this.playerDecks[player]?.autosortNow();
 			}
 
-			if (this.aborted()) return;
+			if (this.turnStale(gen)) return;
 			// GIOCHI (calate + appoggi)
 			const plays = ai.decidePlays(this.buildView(player));
 			this.logAi(player, plays.reason);
@@ -816,7 +862,7 @@ export class Board implements AfterViewInit {
 				if (this.roundPhase() !== RoundPhase.InProgress) break;
 				if (this.turnStep() !== RoundTurnStep.PlayAndDiscard) break;
 				await this.waitStep();
-				if (this.aborted()) return;
+				if (this.turnStale(gen)) return;
 				const ok =
 					play.kind === 'open'
 						? this.game.openMeld(play.cards)
@@ -826,17 +872,29 @@ export class Board implements AfterViewInit {
 				this.playerDecks[player]?.autosortNow();
 			}
 
-			if (this.aborted()) return;
+			if (this.turnStale(gen)) return;
 			// SCARTO (se la mano non è già chiusa dalle giocate)
 			if (
 				this.roundPhase() === RoundPhase.InProgress &&
 				this.turnStep() === RoundTurnStep.PlayAndDiscard
 			) {
 				await this.waitStep();
-				if (this.aborted()) return;
+				if (this.turnStale(gen)) return;
 				const discard = ai.decideDiscard(this.buildView(player));
 				this.logAi(player, discard.reason);
-				if (discard.value) this.game.discard(discard.value);
+				let discarded = discard.value ? this.game.discard(discard.value) : false;
+				if (!discarded) {
+					// Guardia difensiva: se lo scarto scelto è rifiutato dal Round (es. matta
+					// in chiusura, Art. 14), ripiega su un naturale. Se nemmeno quello è
+					// possibile (mano di sole matte), sospende il turno SENZA ri-schedularlo:
+					// mai un loop infinito che blocca la partita.
+					const fallback = this.round.hands()[player].find((c) => !isWild(c));
+					discarded = !!fallback && this.game.discard(fallback);
+					if (!discarded) {
+						this.logAi(player, 'Nessuno scarto legale possibile: turno sospeso.');
+						return;
+					}
+				}
 				await this.tweener.whenIdle();
 				this.playerDecks[player]?.autosortNow();
 			}
@@ -858,18 +916,21 @@ export class Board implements AfterViewInit {
 		const potFlags = this.game.playerHasTakenPot();
 		const hands = this.game.hands();
 		const discardPile = this.game.discardPile();
+		// Copie difensive: l'IA riceve una vista read-only. Copiando gli array (mano, monte,
+		// giochi) un eventuale `.sort()`/`.push()` in-place dell'IA non corromperebbe lo
+		// stato del Game (single-writer). Costo trascurabile (array piccoli).
 		return {
 			me: player,
 			team,
 			partner,
 			opponents,
-			hand: hands[player],
+			hand: hands[player].slice(),
 			partnerHandCount: hands[partner].length,
-			discardPile,
+			discardPile: discardPile.slice(),
 			discardTop: discardPile.at(-1) ?? null,
 			drawPileCount: this.game.drawPile().length,
-			myMelds: melds[team],
-			theirMelds: melds[otherTeam],
+			myMelds: melds[team].map((m) => m.slice()),
+			theirMelds: melds[otherTeam].map((m) => m.slice()),
 			potTakenByTeam: potFlags[player] || potFlags[partner],
 			teamHasBurraco: this.game.teamHasBurraco()[team],
 			opponentsTookPot: opponents.some((o) => potFlags[o]),
@@ -955,10 +1016,11 @@ export class Board implements AfterViewInit {
 	}
 
 	private say(player: PlayerSide, text: string): void {
-		this.aiSpeech.set({ player, text });
-		setTimeout(() => {
-			const current = this.aiSpeech();
-			if (current?.player === player && current?.text === text) this.aiSpeech.set(null);
+		clearTimeout(this.speechTimers[player]);
+		this.aiSpeech.update((s) => ({ ...s, [player]: text }));
+		this.speechTimers[player] = setTimeout(() => {
+			this.aiSpeech.update((s) => ({ ...s, [player]: null }));
+			delete this.speechTimers[player];
 		}, 2800);
 	}
 
@@ -1032,6 +1094,9 @@ export class Board implements AfterViewInit {
 			this.debugMessage.set('JSON non valido: ' + (e as Error).message);
 			return;
 		}
+		// Invalida un eventuale turno IA in corso/in pausa: lo stato cambia sotto i piedi.
+		this.resetGen++;
+		this.advanceStep();
 		this.tweener?.reset();
 		this.round.restoreState(parsed);
 		this.sortHands();

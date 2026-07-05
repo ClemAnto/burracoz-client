@@ -90,17 +90,6 @@
 }
 
 <!-- ============================================================
-  VOCE IA: fumetto dell'ultima battuta
-============================================================ -->
-@if (aiSpeech(); as speech) {
-	<div class="absolute top-2 left-1/2 z-50 -translate-x-1/2 pointer-events-none">
-		<div class="rounded-2xl bg-white px-4 py-2 text-sm text-gray-900 shadow-lg">
-			<strong>{{ PLAYER_LABELS[speech.player] }}:</strong> {{ speech.text }}
-		</div>
-	</div>
-}
-
-<!-- ============================================================
   HEADER: stato partita, turno corrente, azioni
 ============================================================ -->
 <header class="p-2 flex gap-3 items-center flex-wrap z-10">
@@ -180,6 +169,9 @@
 				[selectable]="currentPlayer() === PlayerSide.North && canPlay()"
 				class="z-3 grow place-content-center"
 			/>
+			@if (aiSpeech()[PlayerSide.North]; as text) {
+				<ui-speech-bubble side="north" [label]="aiNameOf(PlayerSide.North)" [text]="text" />
+			}
 		</div>
 
 		<!-- CENTRO: Est | (giochi LORO / pesca-scarti-pozzetti / giochi NOI) | Ovest -->
@@ -205,6 +197,13 @@
 						[selectable]="currentPlayer() === PlayerSide.East && canPlay()"
 					/>
 				</div>
+				@if (aiSpeech()[PlayerSide.East]; as text) {
+					<ui-speech-bubble
+						side="east"
+						[label]="aiNameOf(PlayerSide.East)"
+						[text]="text"
+					/>
+				}
 			</div>
 
 			<!-- CENTRO: giochi LORO (sopra) · pesca/scarti/pozzetti · giochi NOI (sotto) -->
@@ -377,6 +376,13 @@
 						[selectable]="currentPlayer() === PlayerSide.West && canPlay()"
 					/>
 				</div>
+				@if (aiSpeech()[PlayerSide.West]; as text) {
+					<ui-speech-bubble
+						side="west"
+						[label]="aiNameOf(PlayerSide.West)"
+						[text]="text"
+					/>
+				}
 			</div>
 		</section>
 
@@ -396,6 +402,9 @@
 				[faceDown]="!faceUp()[PlayerSide.South]"
 				class="z-3 grow place-content-center"
 			/>
+			@if (aiSpeech()[PlayerSide.South]; as text) {
+				<ui-speech-bubble side="south" [label]="aiNameOf(PlayerSide.South)" [text]="text" />
+			}
 		</div>
 
 		<img class="absolute left-0 top-0 w-full h-full -z-10" src="images/table_bg.jpg" />
