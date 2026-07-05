@@ -171,6 +171,34 @@ describe('DefaultAi — fase gioca', () => {
 		expect(decision.value.length).toBe(0);
 		expect(decision.reason).toContain('Distratto');
 	});
+
+	it('costruisce una scala usando il 2 naturale (2-3-4)', () => {
+		const ai = makeAi({ patience: 0 });
+		const plays = ai.decidePlays(view({ hand: cards('2♥️ 3♥️ 4♥️ K♣️') })).value;
+		const opens = plays.filter((p) => p.kind === 'open');
+		expect(opens.length).toBe(1);
+		const tags = opens[0].cards.map((c) => c.tag);
+		expect(tags).toContain('2♥️');
+		expect(tags).toContain('3♥️');
+		expect(tags).toContain('4♥️');
+	});
+
+	it('potendo chiudere non lascia in mano solo una matta (Art. 14, no soft-lock)', () => {
+		// In rush (minaccia avversaria) la riserva di scarto sicuro è disattivata: senza la
+		// rete anti soft-lock l'IA calerebbe il tris e resterebbe con la sola matta, che il
+		// Round rifiuta di scartare in chiusura → turno bloccato.
+		const ai = makeAi({ patience: 0 });
+		const v = threatView(3, {
+			hand: cards('7♥️ 7♠️ 7♦️ *'),
+			potTakenByTeam: true,
+			teamHasBurraco: true,
+		});
+		const plays = ai.decidePlays(v).value;
+		const played = new Set(plays.flatMap((p) => p.cards.map((c) => c.uid)));
+		const remaining = v.hand.filter((c) => !played.has(c.uid));
+		// resta almeno un naturale scartabile (non ci si incastra con la sola matta)
+		expect(remaining.some((c) => c.value !== '*' && c.value !== '2')).toBeTrue();
+	});
 });
 
 describe('DefaultAi — stance di chiusura', () => {
@@ -292,6 +320,15 @@ describe('DefaultAi — scale con asso alto', () => {
 		const opens = plays.filter((p) => p.kind === 'open');
 		expect(opens.length).toBe(1);
 		expect(opens[0].cards.map((c) => c.tag)).toContain('A♥️');
+	});
+
+	it('esperto paziente: trattiene una scala corta con asso alto (Q-K-A) per allungarla', () => {
+		// Regressione: `completerTags` senza asso alto dava rank [12,13,1] → nessun
+		// completatore vivo → la scala non veniva mai trattenuta.
+		const ai = makeAi({ experience: 0.8, patience: 0.9, cooperation: 0 });
+		const decision = ai.decidePlays(view({ hand: cards('Q♥️ K♥️ A♥️ 7♣️ 3♦️') }));
+		expect(decision.value.some((p) => p.kind === 'open')).toBeFalse();
+		expect(decision.reason).toContain('trattengo');
 	});
 });
 

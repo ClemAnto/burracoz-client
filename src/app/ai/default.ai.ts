@@ -170,7 +170,7 @@ export class DefaultAi implements AiPlayer {
 		const after = totalCards(this.findOpenMelds([...view.hand, top], view.rules, allowWild));
 		if (after > before) return true;
 
-		return view.myMelds.some((m) => !!view.rules.validateMeld([top], m));
+		return this.servesMelds(top, view.myMelds, view.rules);
 	}
 
 	// ============================================================
@@ -221,6 +221,15 @@ export class DefaultAi implements AiPlayer {
 			trimmed = true;
 		}
 
+		// Rete anti soft-lock: le calate non devono lasciare la mano in uno stato dove
+		// l'unico scarto possibile sarebbe illegale — chiusura scartando una matta (Art. 14)
+		// o svuotarsi senza poter chiudere (§6). Ritira calate finché resta uno scarto
+		// legale (più carte in mano lo garantiscono sempre). Sempre attiva, ogni stance.
+		while (plays.length && !this.hasLegalDiscardAfter(plays, view)) {
+			held.push(plays.pop()!.cards);
+			trimmed = true;
+		}
+
 		// Riserva di scarto sicuro: non calare fino a restare con soli scarti che
 		// servono l'avversario. Meglio tenere un gioco in mano (preferibilmente un
 		// tris: blocca poco ed è ottimo come banca scarti) che essere costretti a
@@ -249,13 +258,44 @@ export class DefaultAi implements AiPlayer {
 	 */
 	protected isSafeDiscard(card: DeckItem, view: GameView): boolean {
 		if (isWild(card)) return false;
-		return !view.theirMelds.some((m) => !!view.rules.validateMeld([card], m));
+		return !this.servesMelds(card, view.theirMelds, view.rules);
+	}
+
+	/** La carta è appoggiabile ad almeno uno di questi giochi a terra (dà punti/sblocca)? */
+	protected servesMelds(card: DeckItem, melds: DeckItem[][], rules: Rules): boolean {
+		return melds.some((m) => !!rules.validateMeld([card], m));
 	}
 
 	/** Dopo aver calato `plays`, resterebbe in mano almeno uno scarto sicuro? */
 	protected hasSafeDiscardAfter(plays: AiPlay[], view: GameView): boolean {
 		const played = new Set<number>(plays.flatMap((p) => p.cards.map((c) => c.uid)));
 		return view.hand.some((c) => !played.has(c.uid) && this.isSafeDiscard(c, view));
+	}
+
+	/**
+	 * Dopo aver calato `plays`, resta uno scarto LEGALE? Il Round rifiuta due scarti: la
+	 * chiusura scartando una matta (Art. 14) e lo svuotamento della mano senza poter
+	 * chiudere (§6). Se le calate lasciassero solo una di queste possibilità l'IA si
+	 * incastrerebbe (turno che non avanza): questa è la rete che lo previene.
+	 */
+	protected hasLegalDiscardAfter(plays: AiPlay[], view: GameView): boolean {
+		const played = new Set<number>(plays.flatMap((p) => p.cards.map((c) => c.uid)));
+		const remaining = view.hand.filter((c) => !played.has(c.uid));
+		if (!remaining.length) return false; // niente da scartare: turno impossibile
+		if (remaining.length >= 2) return true; // scartare non svuota la mano → sempre legale
+		// Un'unica carta: scartarla svuoterebbe la mano.
+		if (!view.potTakenByTeam) return true; // svuotarsi PRENDE il pozzetto (non è chiusura)
+		// Pozzetto già preso: ci si svuota solo CHIUDENDO, con un burraco (già in campo o
+		// formato da queste calate) e uno scarto NON matta (Art. 14).
+		const willHaveBurraco =
+			view.teamHasBurraco ||
+			plays.some((p) => p.kind === 'open' && p.cards.length >= 7) ||
+			plays.some(
+				(p) =>
+					p.kind === 'attach' &&
+					(view.myMelds[p.meldIndex]?.length ?? 0) + p.cards.length >= 7,
+			);
+		return willHaveBurraco && !isWild(remaining[0]);
 	}
 
 	/**
@@ -334,9 +374,14 @@ export class DefaultAi implements AiPlayer {
 	 * pesanti (jolly/pinelle valgono -30/-20 se ci sorprendono con esse in mano).
 	 */
 	protected opponentClosingThreat(view: GameView): boolean {
+		return this.opponentCloseWithin(view, OPPONENT_CLOSE_HAND);
+	}
+
+	/** Un avversario ha preso il pozzetto, ha un burraco e ha ≤ `maxHand` carte in mano. */
+	private opponentCloseWithin(view: GameView, maxHand: number): boolean {
 		if (!view.opponentsTookPot) return false;
 		if (!view.theirMelds.some((m) => m.length >= 7)) return false;
-		return view.opponentHandCounts.some((n) => n <= OPPONENT_CLOSE_HAND);
+		return view.opponentHandCounts.some((n) => n <= maxHand);
 	}
 
 	/**
@@ -345,9 +390,7 @@ export class DefaultAi implements AiPlayer {
 	 * distrarsi). Sottoinsieme più stretto di `opponentClosingThreat`.
 	 */
 	protected opponentClosingImminent(view: GameView): boolean {
-		if (!view.opponentsTookPot) return false;
-		if (!view.theirMelds.some((m) => m.length >= 7)) return false;
-		return view.opponentHandCounts.some((n) => n <= OPPONENT_CLOSE_IMMINENT);
+		return this.opponentCloseWithin(view, OPPONENT_CLOSE_IMMINENT);
 	}
 
 	/**
@@ -445,14 +488,21 @@ export class DefaultAi implements AiPlayer {
 			}
 		}
 
-		// SEQUENZA: per seme, segmenti di rank consecutivi (≥3, o 2 + matta). Doppio
-		// passaggio: asso BASSO (A-2-3…) e, se c'è un asso, anche ALTO (…-Q-K-A).
-		const bySuit = groupBy(naturals, (c) => c.suit);
-		const wild = allowWild ? wilds[0] : undefined;
-		for (const group of bySuit.values()) {
-			candidates.push(...collectRunSegments(group, false, wild));
+		// SEQUENZA: per seme, segmenti di rank consecutivi (≥3, o 2 + matta). Il 2 può
+		// essere NATURALE in scala (A-2-3, 2-3-4), quindi le scale si costruiscono su TUTTE
+		// le carte tranne i jolly; come matta-completatore serve un jolly o un 2 di ALTRO
+		// seme (matta pura lì, non un doppione della naturale). Doppio passaggio: asso BASSO
+		// (A-2-3…) e, se c'è un asso, anche ALTO (…-Q-K-A). La validità resta di `Rules`.
+		const jokers = cards.filter((c) => c.value === '*');
+		const runNaturals = cards.filter((c) => c.value !== '*');
+		const bySuit = groupBy(runNaturals, (c) => c.suit);
+		for (const [suit, group] of bySuit.entries()) {
+			const completer = allowWild
+				? (jokers[0] ?? cards.find((c) => c.value === '2' && c.suit !== suit))
+				: undefined;
+			candidates.push(...collectRunSegments(group, false, completer));
 			if (group.some((c) => c.value === 'A')) {
-				candidates.push(...collectRunSegments(group, true, wild));
+				candidates.push(...collectRunSegments(group, true, completer));
 			}
 		}
 
@@ -556,9 +606,7 @@ export class DefaultAi implements AiPlayer {
 	protected defensiveDiscard(view: GameView): AiDecision<DeckItem> {
 		const ranked = view.hand
 			.map((card) => {
-				const servesThem = view.theirMelds.some(
-					(m) => !!view.rules.validateMeld([card], m),
-				);
+				const servesThem = this.servesMelds(card, view.theirMelds, view.rules);
 				// Priorità di scarto (più alta = prima): penalità alta, ma pesante malus se
 				// appoggiabile ai loro giochi o se è una matta (da calare, non da regalare).
 				const shed = pointsOf(card) - (servesThem ? 100 : 0) - (isWild(card) ? 60 : 0);
@@ -593,7 +641,7 @@ export class DefaultAi implements AiPlayer {
 				// "vive" sono quelle che RICORDO non uscite: chi ha poca attenzione le vede
 				// tutte vive uniformemente (contributo costante) → di fatto non conta le carte.
 				let danger = 0;
-				if (view.theirMelds.some((m) => !!view.rules.validateMeld([card], m))) {
+				if (this.servesMelds(card, view.theirMelds, view.rules)) {
 					danger += 6;
 					notes.push('appoggiabile dai loro');
 				}
@@ -675,8 +723,10 @@ export class DefaultAi implements AiPlayer {
 
 		// Fedeltà di registrazione = `attention`: la pienamente attenta (1) registra ogni
 		// carta vista uscire, la distratta (0) nulla, la via di mezzo dimentica ~metà →
-		// quadro parziale (può credere ancora viva una carta già uscita).
-		if (event.cards) {
+		// quadro parziale (può credere ancora viva una carta già uscita). Alla PRESA del
+		// monte (`take_discard`) le carte erano già state registrate allo scarto e tornano
+		// nascoste in mano: non ricontarle (gonfierebbe `seen`).
+		if (event.cards && event.kind !== 'take_discard') {
 			for (const card of event.cards) {
 				if (this.rng() < this.profile.attention) {
 					this.seen.set(card.tag, (this.seen.get(card.tag) ?? 0) + 1);
@@ -1006,7 +1056,11 @@ function completerTags(meld: DeckItem[]): string[] {
 
 	if (isRunMeld(meld)) {
 		const suit = naturals[0].suit;
-		const ranks = naturals.map((c) => getCardRank(c.value));
+		// L'asso è ALTO se la scala contiene anche un K (…-Q-K-A): senza `aceHigh` i rank
+		// diventavano [12,13,1] e i completatori risultavano nulli (bug: mai trattenuta).
+		const aceHigh =
+			naturals.some((c) => c.value === 'A') && naturals.some((c) => c.value === 'K');
+		const ranks = naturals.map((c) => getCardRank(c.value, aceHigh));
 		const below = rankToValue(Math.min(...ranks) - 1);
 		const above = rankToValue(Math.max(...ranks) + 1);
 		return [below, above].filter((v): v is CardValue => !!v).map((v) => v + SuitTag[suit]);
@@ -1030,9 +1084,10 @@ const RANK_VALUES: Record<number, CardValue> = {
 	11: 'J',
 	12: 'Q',
 	13: 'K',
+	14: 'A', // asso alto (…-K-A): completatore di una scala che termina col K
 };
 
-/** Valore corrispondente a un rank 1..13 (null fuori range: niente asso alto in v1). */
+/** Valore corrispondente a un rank 1..14 (14 = asso alto). null fuori range. */
 function rankToValue(rank: number): CardValue | null {
 	return RANK_VALUES[rank] ?? null;
 }
