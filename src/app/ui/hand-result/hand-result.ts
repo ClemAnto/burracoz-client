@@ -17,6 +17,8 @@ export class HandResult {
 	gameEnded = input<boolean>(false);
 	/** Squadra vincitrice della partita (messaggio di fine partita). */
 	gameWinner = input<RoundTeam | null>(null);
+	/** La mano si è chiusa per FINE TALLONE (nessuna chiusura reale, niente +100). */
+	byStockExhaustion = input<boolean>(false);
 	/** Etichetta del giocatore che ha chiuso la mano. */
 	winnerLabel = input<string>('');
 	/** Punteggio della mano (breakdown per squadra). */

@@ -305,4 +305,18 @@ describe('Round – pozzetto e chiusura', () => {
 		expect(round.score()![team].breakdown.closureBonus).toBe(100);
 		expect(closeEvents).toContain(RoundEventType.Close);
 	});
+
+	it('fine tallone: la mano finisce senza +100 quando il tallone si esaurisce', () => {
+		round.startHand();
+		const player = round.currentPlayer()!;
+		round.drawFromStock(); // → fase gioca-e-scarta
+		round.drawPile.set([]); // tallone esaurito: il prossimo turno non avrebbe da pescare
+
+		expect(round.discard(round.hands()[player].at(-1)!)).toBeTrue();
+
+		expect(round.phase()).toBe(RoundPhase.Closed); // mano chiusa per fine tallone
+		const score = round.score()!;
+		expect(score.ours.breakdown.closureBonus).toBe(0); // nessun +100
+		expect(score.opponents.breakdown.closureBonus).toBe(0);
+	});
 });

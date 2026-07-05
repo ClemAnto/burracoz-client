@@ -63,6 +63,7 @@ export type RoundSavedState = {
 	winnerPlayer: RoundPlayer | null;
 	winnerTeam: RoundTeam | null;
 	score: RoundScore | null;
+	endedByStockExhaustion?: boolean;
 	playerHasTakenPot: Record<RoundPlayer, boolean>;
 };
 
@@ -146,6 +147,8 @@ export class Round {
 	winnerPlayer = signal<RoundPlayer | null>(null);
 	winnerTeam = signal<RoundTeam | null>(null);
 	score = signal<RoundScore | null>(null);
+	/** La mano si è chiusa per FINE TALLONE (senza chiusura reale, niente +100). */
+	endedByStockExhaustion = signal<boolean>(false);
 	lastError = signal<string | null>(null);
 	playerHasTakenPot = signal<Record<PlayerSide, boolean>>(createEmptyPotFlags());
 	teamHasBurraco = computed(() => {
@@ -222,6 +225,7 @@ export class Round {
 		this.winnerPlayer.set(null);
 		this.winnerTeam.set(null);
 		this.score.set(null);
+		this.endedByStockExhaustion.set(false);
 	}
 
 	startHand(): void {
@@ -305,6 +309,7 @@ export class Round {
 			winnerPlayer: this.winnerPlayer(),
 			winnerTeam: this.winnerTeam(),
 			score: this.score(),
+			endedByStockExhaustion: this.endedByStockExhaustion(),
 			playerHasTakenPot: { ...this.playerHasTakenPot() },
 		};
 	}
@@ -335,6 +340,7 @@ export class Round {
 		this.winnerPlayer.set(state.winnerPlayer);
 		this.winnerTeam.set(state.winnerTeam);
 		this.score.set(state.score);
+		this.endedByStockExhaustion.set(state.endedByStockExhaustion ?? false);
 		this.playerHasTakenPot.set({ ...state.playerHasTakenPot });
 	}
 	constructor(private readonly rules: Rules) {}
@@ -525,6 +531,13 @@ export class Round {
 	}
 
 	private nextTurn(): void {
+		// Fine tallone: se il prossimo giocatore non avrebbe da pescare, la mano finisce
+		// (senza +100). Il monte scarti si ristabilizza sempre a ≥1 carta, quindi il
+		// tallone esaurito è l'unica condizione terminale deterministica.
+		if (!this.drawPile().length) {
+			this.endByStockExhaustion();
+			return;
+		}
 		this.currentPlayer.set(this.nextPlayer(this.currentPlayer()!));
 		this.turnStep.set(RoundTurnStep.DrawOrCollect);
 		this.turnIndex.update((n) => n + 1);
@@ -538,11 +551,33 @@ export class Round {
 			`CHIUSURA di ${player} (${team}) — noi ${score.ours.total}, loro ${score.opponents.total}`,
 		);
 		this.phase.set(RoundPhase.Closed);
+		this.endedByStockExhaustion.set(false);
 		this.winnerPlayer.set(player);
 		this.winnerTeam.set(team);
 		this.score.set(score);
 		this.gameplayEvents.next({ type: RoundEventType.Close, player });
 		this.events.next({ type: 'round_closed', winnerPlayer: player, winnerTeam: team, score });
+	}
+
+	/**
+	 * Fine tallone (regolamento §6): quando non c'è più da pescare e nessuno ha chiuso,
+	 * la mano termina lo stesso ma SENZA il bonus di chiusura (+100). Si calcola il
+	 * punteggio normale e vince la mano la squadra col totale più alto (a parità, ours).
+	 */
+	private endByStockExhaustion(): void {
+		const score = this.computeScore(null);
+		const winnerTeam: RoundTeam =
+			score.ours.total >= score.opponents.total ? 'ours' : 'opponents';
+		const winnerPlayer = playersOfTeam(winnerTeam)[0];
+		glog(
+			`FINE TALLONE — nessuna chiusura. noi ${score.ours.total}, loro ${score.opponents.total}`,
+		);
+		this.phase.set(RoundPhase.Closed);
+		this.endedByStockExhaustion.set(true);
+		this.winnerPlayer.set(winnerPlayer);
+		this.winnerTeam.set(winnerTeam);
+		this.score.set(score);
+		this.events.next({ type: 'round_closed', winnerPlayer, winnerTeam, score });
 	}
 
 	// ============================================================
@@ -556,7 +591,7 @@ export class Round {
 	 * (pulito +200, semipulito +150, sporco +100) + chiusura +100 (vincitore).
 	 * Negativi: carte rimaste in mano (per valore) + pozzetto non preso (-100).
 	 */
-	private computeScore(winnerTeam: RoundTeam): RoundScore {
+	private computeScore(closer: RoundTeam | null): RoundScore {
 		const melds = this.melds();
 		const hands = this.hands();
 		const potTaken = this.playerHasTakenPot();
@@ -571,7 +606,8 @@ export class Round {
 					burracoBonus += type === 'pulito' ? 200 : type === 'semipulito' ? 150 : 100;
 			}
 
-			const closureBonus = team === winnerTeam ? 100 : 0;
+			// +100 solo a chi chiude davvero; per il fine tallone (`closer` null) non c'è.
+			const closureBonus = closer !== null && team === closer ? 100 : 0;
 
 			const players = playersOfTeam(team);
 

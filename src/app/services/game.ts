@@ -224,6 +224,11 @@ export class Game {
 		return this.round.score;
 	}
 
+	/** La mano corrente si è chiusa per FINE TALLONE (nessuna chiusura reale). */
+	get handEndedByStockExhaustion() {
+		return this.round.endedByStockExhaustion;
+	}
+
 	// ----------------------------------------------------------
 	// Stream di eventi
 	// ----------------------------------------------------------
@@ -437,11 +442,9 @@ export class Game {
 	}
 
 	/**
-	 * Chiamato quando Round segnala la chiusura della mano (round_closed).
-	 * Aggiunge il risultato allo storico del game.
-	 *
-	 * Estensione futura: qui si può implementare la logica di fine partita
-	 * (es. dopo N mani, o al raggiungimento di una soglia di punteggio).
+	 * Chiamato quando Round segnala la chiusura della mano (round_closed, sia per
+	 * chiusura normale sia per fine tallone). Aggiunge il risultato allo storico del
+	 * game e valuta la fine partita (`maybeEndGame`).
 	 */
 	private onRoundClosed(
 		winnerPlayer: RoundPlayer,

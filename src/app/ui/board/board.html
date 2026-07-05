@@ -3,6 +3,7 @@
 	<ui-hand-result
 		[gameEnded]="isGameEnded()"
 		[gameWinner]="gameWinner()"
+		[byStockExhaustion]="handEndedByStockExhaustion()"
 		[winnerLabel]="PLAYER_LABELS[winnerPlayer()] ?? (winnerPlayer() | uppercase)"
 		[score]="handScore()"
 		[totalScore]="totalScore()"

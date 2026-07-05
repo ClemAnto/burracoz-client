@@ -201,6 +201,7 @@ export class Board implements AfterViewInit {
 
 	winnerPlayer = this.game.winnerPlayer;
 	handScore = this.game.handScore;
+	handEndedByStockExhaustion = this.game.handEndedByStockExhaustion;
 	isGameEnded = this.game.isGameEnded;
 	gameWinner = this.game.gameWinner;
 

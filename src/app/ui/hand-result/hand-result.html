@@ -6,6 +6,11 @@
 				Vince la squadra:
 				<strong>{{ gameWinner() === 'ours' ? 'NOI' : 'AVVERSARI' }}</strong>
 			</p>
+		} @else if (byStockExhaustion()) {
+			<h2 class="mb-1 text-center text-2xl font-bold">Fine tallone!</h2>
+			<p class="mb-4 text-center text-gray-500">
+				Tallone esaurito, nessuna chiusura — mano senza il bonus di +100.
+			</p>
 		} @else {
 			<h2 class="mb-1 text-center text-2xl font-bold">Mano chiusa!</h2>
 			<p class="mb-4 text-center text-gray-500">
